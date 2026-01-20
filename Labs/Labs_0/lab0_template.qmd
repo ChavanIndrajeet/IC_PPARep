@@ -85,7 +85,7 @@ car_df
 
 **Question:** What differences do you notice in how they print?
 
-**Your answer:** [YOUR ANSWER]
+**Your answer:** I did not observe any differences
 
 # Exercise 2: Basic Column Operations
 
