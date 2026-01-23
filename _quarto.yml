@@ -10,7 +10,7 @@ navbar:
       text: Home
     - text: Labs
       menu:
-        - href: labs/lab_0/
+        - href: Labs/Labs_0/lab0_IC.qmd
           text: Lab 0: dplyr Basics
 
 format:
