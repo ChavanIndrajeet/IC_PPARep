@@ -224,11 +224,11 @@ car_data %>%
 **Question:** Average price by Manufacturer?
 
 **Your answer:** 
-BMW	24429.46			
-Ford	10672.29			
+BMW	    24429.46			
+Ford	  10672.29			
 Porsche	29103.76			
 Toyota	14340.36			
-VW	10363.14	
+VW	    10363.14	
 
 **Question:** Average mileage by fuel type?
 
@@ -240,10 +240,10 @@ Petrol	112794.8
 **Question:** Cars by Manufacturer?
 
 **Your answer:** 
-Ford	14959			
-VW	14913			
+Ford	  14959			
+VW	    14913			
 Toyota	12554			
-BMW	4965			
+BMW	    4965			
 Porsche	2609	
 
 ## 5.2 Categorical Summaries
@@ -258,8 +258,8 @@ car_data %>%
 **Question:** Frequency table for price categories?
 
 **Your answer:**
-budget	34040			
-luxury	6178			
+budget    34040			
+luxury	  6178			
 midrange	9782	
 
 # Submission Notes
