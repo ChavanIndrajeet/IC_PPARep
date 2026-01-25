@@ -4,14 +4,14 @@ project:
 
 website:
   title: "Indrajeet Chavan - CPLN 5920 Portfolio"
-navbar:
-  left:
-    - href: index.qmd
-      text: Home
-    - text: Labs
-      menu:
-      - href: Labs/Labs_0/lab0_IC.qmd
-        text: Lab 0: dplyr Basics
+  navbar:          # 👈 indentation matters
+    left:
+      - href: index.qmd
+        text: Home
+      - text: Labs
+        menu:
+          - href: Labs/Labs_0/lab0_IC.qmd
+            text: "Lab 0: dplyr Basics"
 
 format:
   html:
