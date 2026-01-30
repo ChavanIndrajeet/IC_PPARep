@@ -124,5 +124,418 @@
     "title": "CPLN 5920 Portfolio: Labs",
     "section": "",
     "text": "Current Labs: Lab 0"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html",
+    "href": "Labs/Labs_1/lab1_IC.html",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "",
+    "text": "You are a data analyst for the Philadelphia/Pennsylvania Department of Human Services. The department is considering implementing an algorithmic system to identify communities that should receive priority for social service funding and outreach programs. Your supervisor has asked you to evaluate the quality and reliability of available census data to inform this decision.\nDrawing on our Week 2 discussion of algorithmic bias, you need to assess not just what the data shows, but how reliable it is and what communities might be affected by data quality issues.\n\n\n\n\nApply dplyr functions to real census data for policy analysis\nEvaluate data quality using margins of error\nConnect technical analysis to algorithmic decision-making\nIdentify potential equity implications of data reliability issues\nCreate professional documentation for policy stakeholders\n\n\n\n\nSubmit by posting your updated portfolio link on Canvas. Your assignment should be accessible at your-portfolio-url/labs/lab_1/\nMake sure to update your _quarto.yml navigation to include this assignment under an “Labs” menu."
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#scenario",
+    "href": "Labs/Labs_1/lab1_IC.html#scenario",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "",
+    "text": "You are a data analyst for the Philadelphia/Pennsylvania Department of Human Services. The department is considering implementing an algorithmic system to identify communities that should receive priority for social service funding and outreach programs. Your supervisor has asked you to evaluate the quality and reliability of available census data to inform this decision.\nDrawing on our Week 2 discussion of algorithmic bias, you need to assess not just what the data shows, but how reliable it is and what communities might be affected by data quality issues."
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#learning-objectives",
+    "href": "Labs/Labs_1/lab1_IC.html#learning-objectives",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "",
+    "text": "Apply dplyr functions to real census data for policy analysis\nEvaluate data quality using margins of error\nConnect technical analysis to algorithmic decision-making\nIdentify potential equity implications of data reliability issues\nCreate professional documentation for policy stakeholders"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#submission-instructions",
+    "href": "Labs/Labs_1/lab1_IC.html#submission-instructions",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "",
+    "text": "Submit by posting your updated portfolio link on Canvas. Your assignment should be accessible at your-portfolio-url/labs/lab_1/\nMake sure to update your _quarto.yml navigation to include this assignment under an “Labs” menu."
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#data-retrieval",
+    "href": "Labs/Labs_1/lab1_IC.html#data-retrieval",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "2.1 Data Retrieval",
+    "text": "2.1 Data Retrieval\nYour Task: Use get_acs() to retrieve county-level data for your chosen state.\nRequirements: - Geography: county level - Variables: median household income (B19013_001) and total population (B01003_001)\n- Year: 2022 - Survey: acs5 - Output format: wide\nHint: Remember to give your variables descriptive names using the variables = c(name = \"code\") syntax.\n\n# Write your get_acs() code here\nPA_data &lt;- get_acs(geography = \"County\", state = \"PA\", \n                   variables = c(medinc = \"B19013_001\", \n                                 totpop = \"B01003_001\"), #Median Income and Total Population\n                   year = 2022, survey = \"acs5\", \n                   output = \"wide\")\n\nPA_data\n\n# A tibble: 67 × 6\n   GEOID NAME                           medincE medincM totpopE totpopM\n   &lt;chr&gt; &lt;chr&gt;                            &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;\n 1 42001 Adams County, Pennsylvania       78975    3334  104604      NA\n 2 42003 Allegheny County, Pennsylvania   72537     869 1245310      NA\n 3 42005 Armstrong County, Pennsylvania   61011    2202   65538      NA\n 4 42007 Beaver County, Pennsylvania      67194    1531  167629      NA\n 5 42009 Bedford County, Pennsylvania     58337    2606   47613      NA\n 6 42011 Berks County, Pennsylvania       74617    1191  428483      NA\n 7 42013 Blair County, Pennsylvania       59386    2058  122640      NA\n 8 42015 Bradford County, Pennsylvania    60650    2167   60159      NA\n 9 42017 Bucks County, Pennsylvania      107826    1516  645163      NA\n10 42019 Butler County, Pennsylvania      82932    2164  194562      NA\n# ℹ 57 more rows\n\n# Clean the county names to remove state name and \"County\" \n# Hint: use mutate() with str_remove()\nPA &lt;- PA_data %&gt;%\n  mutate(\n    # Remove state name from county names\n    county_name = str_remove(NAME, \", Pennsylvania\"),\n    # Remove \"County\" word\n    county_name = str_remove(county_name, \" County\")\n  )\n\n# Display the first few rows\nhead(PA)\n\n# A tibble: 6 × 7\n  GEOID NAME                         medincE medincM totpopE totpopM county_name\n  &lt;chr&gt; &lt;chr&gt;                          &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt; &lt;chr&gt;      \n1 42001 Adams County, Pennsylvania     78975    3334  104604      NA Adams      \n2 42003 Allegheny County, Pennsylva…   72537     869 1245310      NA Allegheny  \n3 42005 Armstrong County, Pennsylva…   61011    2202   65538      NA Armstrong  \n4 42007 Beaver County, Pennsylvania    67194    1531  167629      NA Beaver     \n5 42009 Bedford County, Pennsylvania   58337    2606   47613      NA Bedford    \n6 42011 Berks County, Pennsylvania     74617    1191  428483      NA Berks"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#data-quality-assessment",
+    "href": "Labs/Labs_1/lab1_IC.html#data-quality-assessment",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "2.2 Data Quality Assessment",
+    "text": "2.2 Data Quality Assessment\nYour Task: Calculate margin of error percentages and create reliability categories.\nRequirements: - Calculate MOE percentage: (margin of error / estimate) * 100 - Create reliability categories: - High Confidence: MOE &lt; 5% - Moderate Confidence: MOE 5-10%\n- Low Confidence: MOE &gt; 10% - Create a flag for unreliable estimates (MOE &gt; 10%)\nHint: Use mutate() with case_when() for the categories.\n\n# Calculate MOE percentage and reliability categories using mutate()\nPA_Reliability &lt;- PA %&gt;%\n  mutate( moe_pct = (medincM/medincE)*100,\n          reliability = case_when(\n            moe_pct &lt; 5 ~ \"High Confidence\",\n            moe_pct &gt;= 5 & moe_pct &lt;= 10 ~ \"Moderate Confidence\",\n            moe_pct &gt; 10 ~ \"Low Confidence\"))\n\nhead(PA_Reliability)\n\n# A tibble: 6 × 9\n  GEOID NAME     medincE medincM totpopE totpopM county_name moe_pct reliability\n  &lt;chr&gt; &lt;chr&gt;      &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt;   &lt;dbl&gt; &lt;chr&gt;         &lt;dbl&gt; &lt;chr&gt;      \n1 42001 Adams C…   78975    3334  104604      NA Adams          4.22 High Confi…\n2 42003 Alleghe…   72537     869 1245310      NA Allegheny      1.20 High Confi…\n3 42005 Armstro…   61011    2202   65538      NA Armstrong      3.61 High Confi…\n4 42007 Beaver …   67194    1531  167629      NA Beaver         2.28 High Confi…\n5 42009 Bedford…   58337    2606   47613      NA Bedford        4.47 High Confi…\n6 42011 Berks C…   74617    1191  428483      NA Berks          1.60 High Confi…\n\n# Create a summary showing count of counties in each reliability category\n# Hint: use count() and mutate() to add percentages\nReliability_Sum &lt;- PA_Reliability %&gt;%\n  count(reliability) %&gt;%\n  mutate(percentage = round((n/sum(n)*100)))\n\nReliability_Sum\n\n# A tibble: 2 × 3\n  reliability             n percentage\n  &lt;chr&gt;               &lt;int&gt;      &lt;dbl&gt;\n1 High Confidence        57         85\n2 Moderate Confidence    10         15"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#high-uncertainty-counties",
+    "href": "Labs/Labs_1/lab1_IC.html#high-uncertainty-counties",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "2.3 High Uncertainty Counties",
+    "text": "2.3 High Uncertainty Counties\nYour Task: Identify the 5 counties with the highest MOE percentages.\nRequirements: - Sort by MOE percentage (highest first) - Select the top 5 counties - Display: county name, median income, margin of error, MOE percentage, reliability category - Format as a professional table using kable()\nHint: Use arrange(), slice(), and select() functions.\n\n# Create table of top 5 counties by MOE percentage\nPA_Uncertainity &lt;- PA_Reliability %&gt;%\n  arrange(desc(moe_pct)) %&gt;%\n  slice(1:5) %&gt;%\n  select(county_name, medincE, medincM, moe_pct, reliability)\n\n# Format as table with kable() - include appropriate column names and caption\nkable(PA_Uncertainity, \n      col.names = c ( \"County\", \"Median Household Income(USD)\", \n                      \"Margin of Error(USD)\", \"MOE (%)\", \n                      \"Reliability Category\"),\n      caption = \"Counties with Highest Income Estimate \n      Uncertainty in Pennsylvania (ACS 2022)\"\n      )\n\n\nCounties with Highest Income Estimate Uncertainty in Pennsylvania (ACS 2022)\n\n\n\n\n\n\n\n\n\nCounty\nMedian Household Income(USD)\nMargin of Error(USD)\nMOE (%)\nReliability Category\n\n\n\n\nForest\n46188\n4612\n9.985278\nModerate Confidence\n\n\nSullivan\n62910\n5821\n9.252901\nModerate Confidence\n\n\nUnion\n64914\n4753\n7.321995\nModerate Confidence\n\n\nMontour\n72626\n5146\n7.085617\nModerate Confidence\n\n\nElk\n61672\n4091\n6.633480\nModerate Confidence\n\n\n\n\n\nData Quality Commentary:\n[Write 2-3 sentences explaining what these results mean for algorithmic decision-making. Consider: Which counties might be poorly served by algorithms that rely on this income data? What factors might contribute to higher uncertainty?]\nThe counties like Forest, Sullivan, Union, Montour, and Elk with the highest margins of error are at risk of being misclassified by algorithms that rely heavily on median income estimates for resource allocation. High uncertainty may be a result of smaller populations, sampling variability, or demographic complexity, which can reduce survey precision. Policymakers should exercise caution when using these estimates for automated decision-making, as communities with unreliable data may be unfairly prioritized."
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#focus-area-selection",
+    "href": "Labs/Labs_1/lab1_IC.html#focus-area-selection",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "3.1 Focus Area Selection",
+    "text": "3.1 Focus Area Selection\nYour Task: Select 2-3 counties from your reliability analysis for detailed tract-level study.\nStrategy: Choose counties that represent different reliability levels (e.g., 1 high confidence, 1 moderate, 1 low confidence) to compare how data quality varies.\n\n# Use filter() to select 2-3 counties from your county_reliability data\n# Store the selected counties in a variable called selected_counties\n\n# Display the selected counties with their key characteristics\n# Show: county name, median income, MOE percentage, reliability category\n\nComment on the output: [write something :)]"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#tract-level-demographics",
+    "href": "Labs/Labs_1/lab1_IC.html#tract-level-demographics",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "3.2 Tract-Level Demographics",
+    "text": "3.2 Tract-Level Demographics\nYour Task: Get demographic data for census tracts in your selected counties.\nRequirements: - Geography: tract level - Variables: white alone (B03002_003), Black/African American (B03002_004), Hispanic/Latino (B03002_012), total population (B03002_001) - Use the same state and year as before - Output format: wide - Challenge: You’ll need county codes, not names. Look at the GEOID patterns in your county data for hints.\n\n# Define your race/ethnicity variables with descriptive names\n\n# Use get_acs() to retrieve tract-level data\n# Hint: You may need to specify county codes in the county parameter\n\n# Calculate percentage of each group using mutate()\n# Create percentages for white, Black, and Hispanic populations\n\n# Add readable tract and county name columns using str_extract() or similar"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#demographic-analysis",
+    "href": "Labs/Labs_1/lab1_IC.html#demographic-analysis",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "3.3 Demographic Analysis",
+    "text": "3.3 Demographic Analysis\nYour Task: Analyze the demographic patterns in your selected areas.\n\n# Find the tract with the highest percentage of Hispanic/Latino residents\n# Hint: use arrange() and slice() to get the top tract\n\n# Calculate average demographics by county using group_by() and summarize()\n# Show: number of tracts, average percentage for each racial/ethnic group\n\n# Create a nicely formatted table of your results using kable()"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#moe-analysis-for-demographic-variables",
+    "href": "Labs/Labs_1/lab1_IC.html#moe-analysis-for-demographic-variables",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "4.1 MOE Analysis for Demographic Variables",
+    "text": "4.1 MOE Analysis for Demographic Variables\nYour Task: Examine margins of error for demographic variables to see if some communities have less reliable data.\nRequirements: - Calculate MOE percentages for each demographic variable - Flag tracts where any demographic variable has MOE &gt; 15% - Create summary statistics\n\n# Calculate MOE percentages for white, Black, and Hispanic variables\n# Hint: use the same formula as before (margin/estimate * 100)\n\n# Create a flag for tracts with high MOE on any demographic variable\n# Use logical operators (| for OR) in an ifelse() statement\n\n# Create summary statistics showing how many tracts have data quality issues"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#pattern-analysis",
+    "href": "Labs/Labs_1/lab1_IC.html#pattern-analysis",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "4.2 Pattern Analysis",
+    "text": "4.2 Pattern Analysis\nYour Task: Investigate whether data quality problems are randomly distributed or concentrated in certain types of communities.\n\n# Group tracts by whether they have high MOE issues\n# Calculate average characteristics for each group:\n# - population size, demographic percentages\n\n# Use group_by() and summarize() to create this comparison\n# Create a professional table showing the patterns\n\nPattern Analysis: [Describe any patterns you observe. Do certain types of communities have less reliable data? What might explain this?]"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#analysis-integration-and-professional-summary",
+    "href": "Labs/Labs_1/lab1_IC.html#analysis-integration-and-professional-summary",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "5.1 Analysis Integration and Professional Summary",
+    "text": "5.1 Analysis Integration and Professional Summary\nYour Task: Write an executive summary that integrates findings from all four analyses.\nExecutive Summary Requirements: 1. Overall Pattern Identification: What are the systematic patterns across all your analyses? 2. Equity Assessment: Which communities face the greatest risk of algorithmic bias based on your findings? 3. Root Cause Analysis: What underlying factors drive both data quality issues and bias risk? 4. Strategic Recommendations: What should the Department implement to address these systematic issues?\nExecutive Summary:\n[Your integrated 4-paragraph summary here]"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#specific-recommendations",
+    "href": "Labs/Labs_1/lab1_IC.html#specific-recommendations",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "6.3 Specific Recommendations",
+    "text": "6.3 Specific Recommendations\nYour Task: Create a decision framework for algorithm implementation.\n\n# Create a summary table using your county reliability data\n# Include: county name, median income, MOE percentage, reliability category\n\n# Add a new column with algorithm recommendations using case_when():\n# - High Confidence: \"Safe for algorithmic decisions\"\n# - Moderate Confidence: \"Use with caution - monitor outcomes\"  \n# - Low Confidence: \"Requires manual review or additional data\"\n\n# Format as a professional table with kable()\n\nKey Recommendations:\nYour Task: Use your analysis results to provide specific guidance to the department.\n\nCounties suitable for immediate algorithmic implementation: [List counties with high confidence data and explain why they’re appropriate]\nCounties requiring additional oversight: [List counties with moderate confidence data and describe what kind of monitoring would be needed]\nCounties needing alternative approaches: [List counties with low confidence data and suggest specific alternatives - manual review, additional surveys, etc.]"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#questions-for-further-investigation",
+    "href": "Labs/Labs_1/lab1_IC.html#questions-for-further-investigation",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "Questions for Further Investigation",
+    "text": "Questions for Further Investigation\n[List 2-3 questions that your analysis raised that you’d like to explore further in future assignments. Consider questions about spatial patterns, time trends, or other demographic factors.]"
+  },
+  {
+    "objectID": "Labs/Labs_1/lab1_IC.html#submission-checklist",
+    "href": "Labs/Labs_1/lab1_IC.html#submission-checklist",
+    "title": "Lab 1: Census Data Quality for Policy Decisions",
+    "section": "Submission Checklist",
+    "text": "Submission Checklist\nBefore submitting your portfolio link on Canvas:\n\nAll code chunks run without errors\nAll “[Fill this in]” prompts have been completed\nTables are properly formatted and readable\nExecutive summary addresses all four required components\nPortfolio navigation includes this assignment\nCensus API key is properly set\nDocument renders correctly to HTML\n\nRemember: Submit your portfolio URL on Canvas, not the file itself. Your assignment should be accessible at your-portfolio-url/labs/lab_1/your_file_name.html"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html",
+    "href": "Labs/Labs_1/week2_slides.html",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "",
+    "text": "Part 0: Questions from Last Week - Github - R? dplyr?\nPart 1: Algorithmic Decision Making\n\nWhat are algorithms in public policy?\nWhen algorithmic decision making goes wrong\nCurrent policy responses\n\nPart 2: Active Learning\n\nSmall group scenarios: designing ethical algorithms\nDiscussion and reflection\n\nPart 3: Census Data Foundations\n\nUnderstanding census data for policy analysis\nGeography and data availability\n\nPart 4: Hands-On Census Data with R\n\nLive demonstration of key functions\nPractice exercises"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#what-well-cover",
+    "href": "Labs/Labs_1/week2_slides.html#what-well-cover",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "",
+    "text": "Part 0: Questions from Last Week - Github - R? dplyr?\nPart 1: Algorithmic Decision Making\n\nWhat are algorithms in public policy?\nWhen algorithmic decision making goes wrong\nCurrent policy responses\n\nPart 2: Active Learning\n\nSmall group scenarios: designing ethical algorithms\nDiscussion and reflection\n\nPart 3: Census Data Foundations\n\nUnderstanding census data for policy analysis\nGeography and data availability\n\nPart 4: Hands-On Census Data with R\n\nLive demonstration of key functions\nPractice exercises"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#opening-question",
+    "href": "Labs/Labs_1/week2_slides.html#opening-question",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Opening Question",
+    "text": "Opening Question\nDiscuss with your table (1 minutes):\nWhat is an algorithm?\nThink beyond just computer code - how do you make decisions in daily life?"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#what-is-an-algorithm",
+    "href": "Labs/Labs_1/week2_slides.html#what-is-an-algorithm",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "What Is An Algorithm?",
+    "text": "What Is An Algorithm?\nDefinition: A set of rules or instructions for solving a problem or completing a task\nExamples:\n\nRecipe for cooking\nDirections to get somewhere\n\nDecision tree for hiring\nComputer program that processes data to make predictions"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#algorithmic-decision-making-in-government",
+    "href": "Labs/Labs_1/week2_slides.html#algorithmic-decision-making-in-government",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Algorithmic Decision Making in Government",
+    "text": "Algorithmic Decision Making in Government\nSystems used to assist or replace human decision-makers\nBased on predictions from models that process historical data containing:\n\nInputs (“features”, “predictors”, “independent variables”, “x”)\nOutputs (“labels”, “outcome”, “dependent variable”, “y”)"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#real-world-examples",
+    "href": "Labs/Labs_1/week2_slides.html#real-world-examples",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Real-World Examples",
+    "text": "Real-World Examples\n\n\nCriminal Justice Recidivism risk scores for bail and sentencing decisions\n\nHousing & Finance\nMortgage lending and tenant screening algorithms\n\nHealthcare Patient care prioritization and resource allocation"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#clarifying-key-terms",
+    "href": "Labs/Labs_1/week2_slides.html#clarifying-key-terms",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Clarifying Key Terms",
+    "text": "Clarifying Key Terms\nData Science → Computer science/engineering focus on algorithms and methods\nData Analytics → Application of data science methods to other disciplines\nMachine Learning → Algorithms for classification & prediction that learn from data\nAI → Algorithms that adjust and improve across iterations (neural networks, etc.)"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#public-sector-context",
+    "href": "Labs/Labs_1/week2_slides.html#public-sector-context",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Public Sector Context",
+    "text": "Public Sector Context\nLong history of government data collection:\n\nCivic registration systems\n\nCensus data\nAdministrative records\nOperations research (post-WWII)\n\nWhat’s new?\n\nMore data (official and “accidental”)\nFocus on prediction rather than explanation\nHarder to interpret and explain"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#why-government-uses-algorithms",
+    "href": "Labs/Labs_1/week2_slides.html#why-government-uses-algorithms",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Why Government Uses Algorithms",
+    "text": "Why Government Uses Algorithms\nGovernments have limited budgets and need to serve everyone\nAlgorithmic decision making is especially appealing because it promises:\n\nEfficiency - process more cases faster\nConsistency - same rules applied to everyone\n\nObjectivity - removes human bias\nCost savings - fewer staff needed\n\nBut does it deliver on these promises?"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#remember-data-analytics-is-subjective",
+    "href": "Labs/Labs_1/week2_slides.html#remember-data-analytics-is-subjective",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Remember: Data Analytics Is Subjective",
+    "text": "Remember: Data Analytics Is Subjective\nEvery step involves human choices:\n\nData cleaning decisions\nData coding or classification\n\nData collection - use of imperfect proxies\nHow you interpret results\nWhat variables you put in the model\n\nThese choices embed human values and biases"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#section",
+    "href": "Labs/Labs_1/week2_slides.html#section",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "",
+    "text": "Healthcare Algorithm Bias\nThe Problem:\nAlgorithm used to identify high-risk patients for additional care systematically discriminated against Black patients\nWhat Went Wrong:\n\nAlgorithm used healthcare costs as a proxy for need\nBlack patients typically incur lower costs due to systemic inequities in access\n\nResult: Black patients under-prioritized despite equivalent levels of illness\n\nScale: Used by hospitals and insurers for over 200 million people annually\nSource: Obermeyer et al. (2019), Science"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#criminal-justice-algorithm-bias",
+    "href": "Labs/Labs_1/week2_slides.html#criminal-justice-algorithm-bias",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Criminal Justice Algorithm Bias",
+    "text": "Criminal Justice Algorithm Bias\nCOMPAS Recidivism Prediction:\nThe Problem:\n\nAlgorithm 2x as likely to falsely flag Black defendants as high risk\nWhite defendants often rated low risk even when they do reoffend\n\nWhy This Happens:\n\nHistorical arrest data reflects biased policing patterns\nSocioeconomic proxies correlate with race\n“Objective” data contains subjective human decisions\n\nSource: ProPublica investigation"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#dutch-welfare-fraud-detection",
+    "href": "Labs/Labs_1/week2_slides.html#dutch-welfare-fraud-detection",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Dutch Welfare Fraud Detection",
+    "text": "Dutch Welfare Fraud Detection\nThe Problem:\n\n“Black box” system operated in secrecy\nImpossible for individuals to understand or challenge decisions\nDisproportionately targeted vulnerable populations\n\nCourt Ruling:\n\nBreached privacy rights under European Convention on Human Rights\nHighlighted unfair profiling and discrimination\nSystem eventually shut down"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#small-group-challenge-10-minutes-we-keep-a-tight-ship-around-here.",
+    "href": "Labs/Labs_1/week2_slides.html#small-group-challenge-10-minutes-we-keep-a-tight-ship-around-here.",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Small Group Challenge (10 Minutes! We keep a tight ship around here.)",
+    "text": "Small Group Challenge (10 Minutes! We keep a tight ship around here.)\nAt your table, pick one scenario and answer three prompts.\nPrompts (plain English, no tech):\n\nProxy: What would you use to stand in for what you want?\nBlind spot: What data gap or historical bias could skew results?\nHarm + Guardrail: Who could be harmed, and one simple safeguard?"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#pick-one-scenario",
+    "href": "Labs/Labs_1/week2_slides.html#pick-one-scenario",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Pick one scenario",
+    "text": "Pick one scenario\n\nEmergency response prioritization (natural disasters)\n\nSchool enrollment assignment\n\nAutomated traffic enforcement (red-light cameras)\n\nHousing assistance allocation\n\nPredictive policing"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#example-so-you-see-the-level",
+    "href": "Labs/Labs_1/week2_slides.html#example-so-you-see-the-level",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Example (so you see the level)",
+    "text": "Example (so you see the level)\nScenario: Emergency response\n\nProxy: 911 call volume → stand-in for “need”\n\nBlind spot: Under-calling where trust/connectivity is low\n\nHarm + Guardrail: Wealthier areas over-prioritized → add a vulnerability boost (age/disability) and a minimum-service floor per zone"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#discuss-at-your-table-8-minutes",
+    "href": "Labs/Labs_1/week2_slides.html#discuss-at-your-table-8-minutes",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Discuss at your table (8 minutes)",
+    "text": "Discuss at your table (8 minutes)\nAnswer these out loud and on one device or notepad:\n\nProxy → “We’d use ____ as a stand-in for ____.”\nBlind spot → “This could miss/undercount ____ because ____.”\nHarm + Guardrail → “Group ____ could be hurt by ____. We’d add ____ (one safeguard).”\n\nChoose ONE guardrail type:\n\nPrioritize vulnerable groups\n\nCap disparities across areas (simple rule)\n\nHuman review + appeals for edge cases\n\nReplace a bad proxy (collect the right thing)\n\nPublish criteria & run a periodic bias check"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#lightning-shares-23-tables",
+    "href": "Labs/Labs_1/week2_slides.html#lightning-shares-23-tables",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Lightning shares (2–3 tables)",
+    "text": "Lightning shares (2–3 tables)\nIn ≤20 seconds, say:\n\nScenario, one proxy, one harm, one guardrail\n\nClass quick poll: Would that guardrail help?\n\n👍 Green light\n👎 Red light"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#why-census-data-matters",
+    "href": "Labs/Labs_1/week2_slides.html#why-census-data-matters",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Why Census Data Matters",
+    "text": "Why Census Data Matters\nCensus data is the foundation for:\n\nUnderstanding community demographics\nAllocating government resources\n\nTracking neighborhood change\nDesigning fair algorithms (like those we just discussed)\n\nConnection: The same demographic data used in census goes into many of the algorithms we analyzed"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#census-vs.-american-community-survey",
+    "href": "Labs/Labs_1/week2_slides.html#census-vs.-american-community-survey",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Census vs. American Community Survey",
+    "text": "Census vs. American Community Survey\n\n\nDecennial Census (2020)\n\nEveryone counted every 10 years\n9 basic questions: age, race, sex, housing\nConstitutional requirement\nDetermines political representation\n\n\nAmerican Community Survey (ACS)\n\n3% of households surveyed annually\nDetailed questions: income, education, employment, housing costs\nReplaced the old “long form” in 2005\nA big source of data we’ll use this semester"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#acs-estimates-what-you-need-to-know",
+    "href": "Labs/Labs_1/week2_slides.html#acs-estimates-what-you-need-to-know",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "ACS Estimates: What You Need to Know",
+    "text": "ACS Estimates: What You Need to Know\n1-Year Estimates (areas &gt; 65,000 people)\n\nMost current data, smallest sample\n\n5-Year Estimates (all areas including census tracts)\n\nMost reliable data, largest sample\nWhat you’ll use most often\n\nKey Point: All ACS data comes with margins of error - we’ll learn to work with uncertainty"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#census-geography-hierarchy",
+    "href": "Labs/Labs_1/week2_slides.html#census-geography-hierarchy",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Census Geography Hierarchy",
+    "text": "Census Geography Hierarchy\nNation\n├── Regions  \n├── States\n│   ├── Counties\n│   │   ├── Census Tracts (1,500-8,000 people)\n│   │   │   ├── Block Groups (600-3,000 people)  \n│   │   │   │   └── Blocks (≈85 people, Decennial only)\nMost policy analysis happens at:\n\nCounty level - state and regional planning\nCensus tract level - neighborhood analysis\nBlock group level - very local analysis (tempting, but big MOEs)"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#census-innovation-differential-privacy",
+    "href": "Labs/Labs_1/week2_slides.html#census-innovation-differential-privacy",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "2020 Census Innovation: Differential Privacy",
+    "text": "2020 Census Innovation: Differential Privacy\nThe Challenge: Modern computing can “re-identify” individuals from census data\nThe Solution: Add mathematical “noise” to protect privacy while preserving overall patterns\nThe Controversy: Some places now show populations living “underwater” or other impossible results\nWhy This Matters: Even “objective” data involves subjective choices about privacy vs. accuracy. Also, the errors."
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#accessing-census-data-in-r",
+    "href": "Labs/Labs_1/week2_slides.html#accessing-census-data-in-r",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Accessing Census Data in R",
+    "text": "Accessing Census Data in R\nTraditional approach: Download CSV files from Census website\nModern approach: Use R packages to access data directly\nBenefits of programmatic access:\n\nAlways get latest data\nReproducible workflows\n\nAutomatic geographic boundaries\nBuilt-in error handling\n\nWe’ll use the tidycensus package starting in Lab 1"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#understanding-acs-data-structure",
+    "href": "Labs/Labs_1/week2_slides.html#understanding-acs-data-structure",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Understanding ACS Data Structure",
+    "text": "Understanding ACS Data Structure\nData organized in tables:\n\nB19013 - Median Household Income\nB25003 - Housing Tenure (Own/Rent)\n\nB15003 - Educational Attainment\nB08301 - Commuting to Work\n\nEach table has multiple variables:\n\nB19013_001E = Median household income (estimate)\nB19013_001M = Median household income (margin of error)\n\nYou’ll learn to find the right variables for your research questions"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#working-with-margins-of-error",
+    "href": "Labs/Labs_1/week2_slides.html#working-with-margins-of-error",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Working with Margins of Error",
+    "text": "Working with Margins of Error\nEvery ACS estimate comes with uncertainty\nRule of thumb:\n\nLarge MOE relative to estimate = less reliable\nSmall MOE relative to estimate = more reliable\n\nIn your analysis:\n\nAlways report MOE alongside estimates\nBe cautious comparing estimates with overlapping error margins\nConsider using 5-year estimates for greater reliability"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#two-types-of-census-data",
+    "href": "Labs/Labs_1/week2_slides.html#two-types-of-census-data",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Two Types of Census Data",
+    "text": "Two Types of Census Data\n\n\nSummary Tables (what we’ll use mostly)\n\nPre-calculated statistics by geography\nMedian income, percent college-educated, etc.\nGood for: Mapping, comparing places\n\n\nPUMS - Individual Records\n\nAnonymous individual/household responses\nGood for: Custom analysis, regression models\nMore complex but more flexible"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#when-new-data-comes-out",
+    "href": "Labs/Labs_1/week2_slides.html#when-new-data-comes-out",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "When New Data Comes Out",
+    "text": "When New Data Comes Out\nACS 1-year estimates: Released in September (previous year’s data)\nACS 5-year estimates: Released in December\nDecennial Census: Released on rolling schedule over 2-3 years\nFor Lab 1: We’ll use 2018-2022 ACS 5-year estimates (latest available)"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#data-sources-youll-use",
+    "href": "Labs/Labs_1/week2_slides.html#data-sources-youll-use",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Data Sources You’ll Use",
+    "text": "Data Sources You’ll Use\nTIGER/Line Files\n\nGeographic boundaries (shapefiles)\nCensus tracts, counties, states\nNow released as shapefiles (easier to use!)\n\nHistorical Data Sources:\n\nNHGIS (nhgis.org) - Historical census data\nNeighborhood Change Database\nLongitudinal Tract Database - Track changes over time"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#live-demo-setup",
+    "href": "Labs/Labs_1/week2_slides.html#live-demo-setup",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Live Demo Setup",
+    "text": "Live Demo Setup\nLet’s see tidycensus in action with some basic examples:\n\n\nCode\nlibrary(tidycensus)\nlibrary(tidyverse)\n\n\n── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──\n✔ dplyr     1.1.4     ✔ readr     2.1.6\n✔ forcats   1.0.1     ✔ stringr   1.6.0\n✔ ggplot2   4.0.1     ✔ tibble    3.3.1\n✔ lubridate 1.9.4     ✔ tidyr     1.3.2\n✔ purrr     1.2.1     \n── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──\n✖ dplyr::filter() masks stats::filter()\n✖ dplyr::lag()    masks stats::lag()\nℹ Use the conflicted package (&lt;http://conflicted.r-lib.org/&gt;) to force all conflicts to become errors\n\n\nCode\nlibrary(knitr)\n# Set API key (you'll get yours for Lab 1)\ncensus_api_key(\"42bf8a20a3df1def380f330cf7edad0dd5842ce6\")\n\n\nTo install your API key for use in future sessions, run this function with `install = TRUE`.\n\n\nFollow along: We’ll work through examples together, then you’ll practice in Lab 1"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#basic-get_acs-function",
+    "href": "Labs/Labs_1/week2_slides.html#basic-get_acs-function",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Basic get_acs() Function",
+    "text": "Basic get_acs() Function\nMost important function you’ll use:\n\n\nCode\n# Get state-level population data\nstate_pop &lt;- get_acs(\n  geography = \"state\",\n  variables = \"B01003_001\",  # Total population\n  year = 2022,\n  survey = \"acs5\"\n)\n\n\nGetting data from the 2018-2022 5-year ACS\n\n\nCode\nglimpse(state_pop)\n\n\nRows: 52\nColumns: 5\n$ GEOID    &lt;chr&gt; \"01\", \"02\", \"04\", \"05\", \"06\", \"08\", \"09\", \"10\", \"11\", \"12\", \"…\n$ NAME     &lt;chr&gt; \"Alabama\", \"Alaska\", \"Arizona\", \"Arkansas\", \"California\", \"Co…\n$ variable &lt;chr&gt; \"B01003_001\", \"B01003_001\", \"B01003_001\", \"B01003_001\", \"B010…\n$ estimate &lt;dbl&gt; 5028092, 734821, 7172282, 3018669, 39356104, 5770790, 3611317…\n$ moe      &lt;dbl&gt; NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, N…\n\n\nKey parameters: geography, variables, year, survey"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#understanding-the-output",
+    "href": "Labs/Labs_1/week2_slides.html#understanding-the-output",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Understanding the Output",
+    "text": "Understanding the Output\nEvery ACS result includes:\n\nGEOID - Geographic identifier\nNAME - Human-readable location name\n\nvariable - Census variable code\nestimate - The actual value\nmoe - Margin of error\n\nThis is the foundation for all your analysis"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#working-with-multiple-variables",
+    "href": "Labs/Labs_1/week2_slides.html#working-with-multiple-variables",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Working with Multiple Variables",
+    "text": "Working with Multiple Variables\n\n\nCode\n# Get income and population for Pennsylvania counties\npa_data &lt;- get_acs(\n  geography = \"county\",\n  variables = c(\n    total_pop = \"B01003_001\",\n    median_income = \"B19013_001\"\n  ),\n  state = \"PA\",\n  year = 2022,\n  output = \"wide\"  # Makes analysis easier\n)\n\n\nGetting data from the 2018-2022 5-year ACS\n\n\nCode\nhead(pa_data)\n\n\n# A tibble: 6 × 6\n  GEOID NAME                 total_popE total_popM median_incomeE median_incomeM\n  &lt;chr&gt; &lt;chr&gt;                     &lt;dbl&gt;      &lt;dbl&gt;          &lt;dbl&gt;          &lt;dbl&gt;\n1 42001 Adams County, Penns…     104604         NA          78975           3334\n2 42003 Allegheny County, P…    1245310         NA          72537            869\n3 42005 Armstrong County, P…      65538         NA          61011           2202\n4 42007 Beaver County, Penn…     167629         NA          67194           1531\n5 42009 Bedford County, Pen…      47613         NA          58337           2606\n6 42011 Berks County, Penns…     428483         NA          74617           1191\n\n\nNote: output = \"wide\" gives you one row per place, multiple columns for variables"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#data-cleaning-essentials",
+    "href": "Labs/Labs_1/week2_slides.html#data-cleaning-essentials",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Data Cleaning Essentials",
+    "text": "Data Cleaning Essentials\nClean up messy geographic names:\n\n\nCode\npa_clean &lt;- pa_data %&gt;%\n  mutate(\n    # Remove state name from county names\n    county_name = str_remove(NAME, \", Pennsylvania\"),\n    # Remove \"County\" word\n    county_name = str_remove(county_name, \" County\")\n  )\n\nhead (pa_clean)\n\n\n# A tibble: 6 × 7\n  GEOID NAME     total_popE total_popM median_incomeE median_incomeM county_name\n  &lt;chr&gt; &lt;chr&gt;         &lt;dbl&gt;      &lt;dbl&gt;          &lt;dbl&gt;          &lt;dbl&gt; &lt;chr&gt;      \n1 42001 Adams C…     104604         NA          78975           3334 Adams      \n2 42003 Alleghe…    1245310         NA          72537            869 Allegheny  \n3 42005 Armstro…      65538         NA          61011           2202 Armstrong  \n4 42007 Beaver …     167629         NA          67194           1531 Beaver     \n5 42009 Bedford…      47613         NA          58337           2606 Bedford    \n6 42011 Berks C…     428483         NA          74617           1191 Berks      \n\n\nCode\n# Compare before and after\nselect(pa_clean, NAME, county_name)\n\n\n# A tibble: 67 × 2\n   NAME                           county_name\n   &lt;chr&gt;                          &lt;chr&gt;      \n 1 Adams County, Pennsylvania     Adams      \n 2 Allegheny County, Pennsylvania Allegheny  \n 3 Armstrong County, Pennsylvania Armstrong  \n 4 Beaver County, Pennsylvania    Beaver     \n 5 Bedford County, Pennsylvania   Bedford    \n 6 Berks County, Pennsylvania     Berks      \n 7 Blair County, Pennsylvania     Blair      \n 8 Bradford County, Pennsylvania  Bradford   \n 9 Bucks County, Pennsylvania     Bucks      \n10 Butler County, Pennsylvania    Butler     \n# ℹ 57 more rows\n\n\nFunctions you’ll use: str_remove(), str_extract(), str_replace()"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#calculating-data-reliability",
+    "href": "Labs/Labs_1/week2_slides.html#calculating-data-reliability",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Calculating Data Reliability",
+    "text": "Calculating Data Reliability\nThis is crucial for policy work:\n\n\nCode\npa_reliability &lt;- pa_clean %&gt;%\n  mutate(\n    # Calculate MOE as percentage of estimate\n    moe_percentage = round((median_incomeM / median_incomeE) * 100, 2),\n    \n    # Create reliability categories\n    reliability = case_when(\n      moe_percentage &lt; 5 ~ \"High Confidence\",\n      moe_percentage &gt;= 5 & moe_percentage &lt;= 10 ~ \"Moderate\",\n      moe_percentage &gt; 10 ~ \"Low Confidence\"\n    )\n  )\n\nhead (pa_reliability)\n\n\n# A tibble: 6 × 9\n  GEOID NAME     total_popE total_popM median_incomeE median_incomeM county_name\n  &lt;chr&gt; &lt;chr&gt;         &lt;dbl&gt;      &lt;dbl&gt;          &lt;dbl&gt;          &lt;dbl&gt; &lt;chr&gt;      \n1 42001 Adams C…     104604         NA          78975           3334 Adams      \n2 42003 Alleghe…    1245310         NA          72537            869 Allegheny  \n3 42005 Armstro…      65538         NA          61011           2202 Armstrong  \n4 42007 Beaver …     167629         NA          67194           1531 Beaver     \n5 42009 Bedford…      47613         NA          58337           2606 Bedford    \n6 42011 Berks C…     428483         NA          74617           1191 Berks      \n# ℹ 2 more variables: moe_percentage &lt;dbl&gt;, reliability &lt;chr&gt;\n\n\nCode\ncount(pa_reliability, reliability)\n\n\n# A tibble: 2 × 2\n  reliability         n\n  &lt;chr&gt;           &lt;int&gt;\n1 High Confidence    57\n2 Moderate           10\n\n\nKey functions: case_when() for categories, MOE calculations"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#finding-patterns-with-dplyr",
+    "href": "Labs/Labs_1/week2_slides.html#finding-patterns-with-dplyr",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Finding Patterns with dplyr",
+    "text": "Finding Patterns with dplyr\n\nFind counties with highest uncertainty\nSummarize by reliability category\n\n\n\nCode\n# Find counties with highest uncertainty\nhigh_uncertainty &lt;- pa_reliability %&gt;%\n  filter(moe_percentage &gt; 8) %&gt;%\n  arrange(desc(moe_percentage)) %&gt;%\n  select(county_name, median_incomeE, moe_percentage)\n\n# Summary by reliability category  \nreliability_summary &lt;- pa_reliability %&gt;%\n  group_by(reliability) %&gt;%\n  summarize(\n    counties = n(),\n    avg_income = round(mean(median_incomeE, na.rm = TRUE), 0)\n  )"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#professional-tables",
+    "href": "Labs/Labs_1/week2_slides.html#professional-tables",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Professional Tables",
+    "text": "Professional Tables\nMaking results presentation-ready:\n\n\nCode\n# Create formatted table\nkable(high_uncertainty,\n      col.names = c(\"County\", \"Median Income\", \"MOE %\"),\n      caption = \"Counties with Highest Income Data Uncertainty\",\n      format.args = list(big.mark = \",\"))\n\n\n\nCounties with Highest Income Data Uncertainty\n\n\nCounty\nMedian Income\nMOE %\n\n\n\n\nForest\n46,188\n9.99\n\n\nSullivan\n62,910\n9.25\n\n\n\n\n\nKey points:\n\nUse kable() for professional formatting\nAdd descriptive column names and captions\n\nFormat numbers appropriately"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#quick-practice",
+    "href": "Labs/Labs_1/week2_slides.html#quick-practice",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Quick Practice",
+    "text": "Quick Practice\nTry this with a neighbor (5 minutes):\nUsing the pa_reliability data we just created:\n\nFilter for counties with “High Confidence” data\nArrange by median income (highest first)\n\nSelect county name and median income\nSlice the top 3 counties\n\nWe’ll share answers before moving on"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#policy-connection",
+    "href": "Labs/Labs_1/week2_slides.html#policy-connection",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Policy Connection",
+    "text": "Policy Connection\nWhy this matters:\n\nAlgorithmic fairness: Unreliable data can bias automated decisions\nResource allocation: Know which areas need extra attention\nEquity analysis: Some communities may be systematically under-counted\nProfessional credibility: Always assess your data quality\n\nThis connects directly to our algorithmic bias discussion"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#from-algorithms-to-analysis",
+    "href": "Labs/Labs_1/week2_slides.html#from-algorithms-to-analysis",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "From Algorithms to Analysis",
+    "text": "From Algorithms to Analysis\nToday’s key connections:\nAlgorithmic Decision Making → Understanding why your analysis matters for real policy decisions\nData Subjectivity → Why we emphasize transparent, reproducible methods in this class\nCensus Data → The foundation for most urban planning and policy analysis\nR Skills → The tools to do this work professionally and ethically"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#questions-for-reflection",
+    "href": "Labs/Labs_1/week2_slides.html#questions-for-reflection",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Questions for Reflection",
+    "text": "Questions for Reflection\nAs you work with data this semester, ask:\n\nWhat assumptions am I making in my data choices?\nWho might be excluded from my analysis?\nHow could my findings be misused if taken out of context?\nWhat would I want policymakers to understand about my methods?\n\nThese questions will make you a more thoughtful analyst and better future policymaker"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#before-next-class",
+    "href": "Labs/Labs_1/week2_slides.html#before-next-class",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Before Next Class",
+    "text": "Before Next Class\nStart Lab 1 - census data exploration (begins today!) Aim to finish section 2 - we will continue this work in class next week"
+  },
+  {
+    "objectID": "Labs/Labs_1/week2_slides.html#questions",
+    "href": "Labs/Labs_1/week2_slides.html#questions",
+    "title": "Algorithmic Decision Making & Census Data",
+    "section": "Questions?",
+    "text": "Questions?"
   }
 ]
