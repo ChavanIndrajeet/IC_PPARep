@@ -163,7 +163,7 @@ head(education_vars, 5)
 ```{r}
 # Open the full variable list in RStudio viewer
 # This opens a searchable data table
-View(acs_vars_2022)
+head(acs_vars_2022)
 
 # Pro tip: You can also search specific table groups
 # B01 = Age and Sex
