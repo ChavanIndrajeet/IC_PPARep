@@ -184,12 +184,22 @@ The counties like Forest, Sullivan, Union, Montour, and Elk with the highest mar
 ```{r select-counties}
 # Use filter() to select 2-3 counties from your county_reliability data
 # Store the selected counties in a variable called selected_counties
-
 # Display the selected counties with their key characteristics
 # Show: county name, median income, MOE percentage, reliability category
+
+tibble (PA_Reliability) %>%
+  arrange(desc(moe_pct))
+
+selected_counties <- PA_Reliability %>%
+  filter (NAME %in% c("Philadelphia County, Pennsylvania",
+                     "Centre County, Pennsylvania",
+                     "Forest County, Pennsylvania")) %>%
+  select(NAME, county_name, totpopE, medincE, moe_pct, reliability) 
+
+selected_counties
 ```
 
-**Comment on the output:** [write something :)]
+**Comment on the output:** The selected counties represent a range of data reliability levels and population sizes. Philadelphia County reflects challenges common in large, diverse urban areas. While Centre County represents a mid-sized county with moderate reliability, Forest County illustrates how small population size can influence margin of error and data confidence. Since there is no low confidence reliability, I have selected Forest county based on the it being closest to low confidence. Center County is selected based on relatively different characteristics to Philadelphia County.
 
 ## 3.2 Tract-Level Demographics
 
@@ -212,6 +222,23 @@ The counties like Forest, Sullivan, Union, Montour, and Elk with the highest mar
 # Create percentages for white, Black, and Hispanic populations
 
 # Add readable tract and county name columns using str_extract() or similar
+
+acs_var1 <- c (white = "B03002_003", 
+               black = "B03002_004", 
+               hispanic = "B03002_012", 
+               total_pop = "B03002_001")
+
+counties <- c ("101", "027", "053") # Philadelphia, Centre, Forest
+
+tract_data <- get_acs(geography = "tract", 
+                      variables = acs_var1,
+                      survey = "acs5",
+                      year = 2022,
+                      state = "PA",
+                      county = counties,
+                      output = "wide")
+
+tract_data
 ```
 
 ## 3.3 Demographic Analysis
@@ -222,11 +249,38 @@ The counties like Forest, Sullivan, Union, Montour, and Elk with the highest mar
 # Find the tract with the highest percentage of Hispanic/Latino residents
 # Hint: use arrange() and slice() to get the top tract
 
+tract_data <- tract_data %>%
+  mutate( white_pct = whiteE/total_popE*100,
+          black_pct = blackE/total_popE*100,
+          hisp_pct = hispanicE/total_popE*100,
+          county_fips = str_sub(GEOID, 3, 5))
+
+top_hisp_tract <- tract_data %>%
+  arrange( desc(hisp_pct)) %>%
+  slice(1) %>%
+  select(NAME,hisp_pct)
+
+top_hisp_tract
+
 # Calculate average demographics by county using group_by() and summarize()
 # Show: number of tracts, average percentage for each racial/ethnic group
 
+county_demogrpahics <- tract_data %>%
+  group_by(county_fips) %>%
+  summarise (tracts = n(),
+             avg_pct_white = mean(white_pct, na.rm = TRUE),
+             avg_pct_black = mean(black_pct, na.rm = TRUE),
+             avg_pct_hisp = mean(hisp_pct, na.rm = TRUE)
+             )
+
 # Create a nicely formatted table of your results using kable()
+kable(county_demogrpahics, 
+      col.names = c("County FIPS", "Tracts", "Avg. White %", "Avg. Black %", "Avg. Hispanic %"),
+      caption = "Average Demographics by County for each Racial/Ethnic Group(ACS 2022)",
+      digits = 1)
+
 ```
+**Comment on the output:** Census Tract 195.02 in Philadelphia County, Pennsylvania has the highest percentage of Hispanic Population at **92.03%**.
 
 # Part 4: Comprehensive Data Quality Evaluation
 
@@ -243,10 +297,32 @@ The counties like Forest, Sullivan, Union, Montour, and Elk with the highest mar
 # Calculate MOE percentages for white, Black, and Hispanic variables
 # Hint: use the same formula as before (margin/estimate * 100)
 
+tract_data <- tract_data %>%
+  mutate(white_moe_pct = whiteM/whiteE*100,
+         black_moe_pct = blackM/blackE*100,
+         hisp_moe_pct = hispanicM/hispanicE*100,
+         tot_moe_pct = total_popM/total_popE*100)
+
 # Create a flag for tracts with high MOE on any demographic variable
 # Use logical operators (| for OR) in an ifelse() statement
 
+demo_MOE_pct <- tract_data %>%
+  mutate(high_moe = ifelse(
+  white_moe_pct > 15 |
+  black_moe_pct > 15 |
+  hisp_moe_pct > 15,
+  "High MOE",
+  "Acceptable MOE"
+  ))
+
 # Create summary statistics showing how many tracts have data quality issues
+
+tract_data_sum <- demo_MOE_pct %>%
+  count(high_moe) %>%
+  mutate(percent = round(n / sum(n) * 100, 1))
+
+tract_data_sum
+
 ```
 
 ## 4.2 Pattern Analysis
@@ -258,11 +334,27 @@ The counties like Forest, Sullivan, Union, Montour, and Elk with the highest mar
 # Calculate average characteristics for each group:
 # - population size, demographic percentages
 
+pattern_summary <- demo_MOE_pct %>%
+  group_by(high_moe) %>%
+  summarize(
+    num_tracts = n(),
+    avg_population = round(mean(total_popE, na.rm = TRUE), 0),
+    avg_pct_white = round(mean(white_pct, na.rm = TRUE), 1),
+    avg_pct_black = round(mean(black_pct, na.rm = TRUE), 1),
+    avg_pct_hispanic = round(mean(hisp_pct, na.rm = TRUE), 1)
+  )
+
 # Use group_by() and summarize() to create this comparison
 # Create a professional table showing the patterns
+
+kable(pattern_summary,
+      col.names = c("Data Quality Category", "Number of Tracts", "Average Population", "Avg % White", 
+                    "Avg % Black", "Avg % Hispanic"),
+      caption = "Demographic Patterns for each group")
+
 ```
 
-**Pattern Analysis:** [Describe any patterns you observe. Do certain types of communities have less reliable data? What might explain this?]
+**Pattern Analysis:** Tracts with high margins of error tend to have smaller populations and higher proportions of minority residents, particularly Hispanic and Black populations. This suggests that data reliability issues are not randomly distributed, but instead are more common in communities that may already face structural disadvantages. **These patterns raise concerns that systems relying on census estimates may systematically underrepresent or mischaracterize the needs of these communities.**
 
 
 # Part 5: Policy Recommendations
@@ -278,8 +370,17 @@ The counties like Forest, Sullivan, Union, Montour, and Elk with the highest mar
 4. **Strategic Recommendations**: What should the Department implement to address these systematic issues?
 
 **Executive Summary:**
+**Overall Pattern Identification: What are the systematic patterns across all your analyses?**
+The analysis reveals consistent and systematic patterns in both data reliability and demographic distribution across Pennsylvania. County-level analysis shows substantial variation in margins of error in key socioeconomic indicators such as median household income. The smaller and less populous counties exhibiting higher uncertainty. Tract-level analysis further demonstrates that data quality issues intensify at finer geographic scales, particularly for demographic variables. Margins of error are not evenly distributed. Instead, they cluster in specific geographies and population groups indicating that uncertainty is a structural feature of the data.
 
-[Your integrated 4-paragraph summary here]
+**Equity Assessment: Which communities face the greatest risk of algorithmic bias based on your findings?**
+Communities facing the greatest risk of algorithmic bias are census tracts with smaller populations and higher concentrations of racial/ethinic (Black and Hispanic) residents. These tracts are disproportionately flagged for high margins of error across multiple demographic variables. If an algorithmic system were to rely on these estimates without accounting for reliability, it could systematically under-identify need or misallocate resources away from communities that already experience social and economic disadvantage. As a result, data uncertainty is an important equity issue. It potentially reinforces th existing disparities in access to public services and funding.
+
+**Root Cause Analysis: What underlying factors drive both data quality issues and bias risk?**
+The observed data quality issues stem from structural limitations in census data collection like lower response rates, higher residential mobility, language barriers and under representation in historically marginalized communities. Smaller population sizes at the tract level amplify statistical uncertainty. At the same time, socioeconomic and demographic factors further contribute to higher margins of error. These same conditions that generate unreliable data are often correlated with greater social service needs. This creates a compounding risk where communities most in need are also those least accurately represented in the data used to inform policy decisions.
+
+**Strategic Recommendations: What should the Department implement to address these systematic issues?**
+To mitigate these risks, the Department should adopt a data-informed but equity-conscious approach to algorithmic decision-making. First, margins of error should be explicitly incorporated into any prioritization model, with safeguards that prevent exclusion based solely on uncertain estimates. Second, areas with consistently high data uncertainty should be flagged for supplemental qualitative review or targeted outreach. Third, the Department should consider combining census data with administrative records and local knowledge to improve reliability in high-risk communities. Finally, transparent documentation of data limitations and regular bias audits should be institutionalized to ensure that algorithmic tools support equitable and accountable policy outcomes.
 
 ## 6.3 Specific Recommendations
 
@@ -294,52 +395,84 @@ The counties like Forest, Sullivan, Union, Montour, and Elk with the highest mar
 # - Moderate Confidence: "Use with caution - monitor outcomes"  
 # - Low Confidence: "Requires manual review or additional data"
 
+recommendations_table <- PA_Reliability %>%
+  select(County = county_name,
+         Median_Income = medincE,
+         MOE_Percentage = moe_pct,
+         Reliability = reliability) %>%
+  mutate(Algorithm_Recommendations = case_when(
+    Reliability == "High Confidence" ~ "Safe for algorithmic decisions",
+    Reliability== "Moderate Confidence" ~ "Use with caution – monitor outcomes",
+    Reliability== "Low Confidence" ~ "Requires manual review or additional data"
+    )
+    )
+
+recommendations_table
+
 # Format as a professional table with kable()
+kable(recommendations_table,
+      col.names = c ("County", "Median Income", "MOE %", "Data Reliability", "Algorithm Recommendations"),
+      caption = "Algorithm Recommendations for County Data",
+      digits = 1
+      )
+
 ```
 
 **Key Recommendations:**
 
 **Your Task:** Use your analysis results to provide specific guidance to the department.
 
-1. **Counties suitable for immediate algorithmic implementation:** [List counties with high confidence data and explain why they're appropriate]
+1. **Counties suitable for immediate algorithmic implementation:** 
+All counties other then Cameroon, Carbon, Elk, Forest, Greene, Montour, Snyder, Sullivan, Union and Warren are classified as **High Confidence** as they are appropriate for immediate inclusion in algorithmic decision-making systems. Their key socioeconomic indicators exhibit low margins of error. The relatively high reliability of income estimates in these counties reduces the risk of misclassification or biased prioritization. Algorithms operating in these contexts are more likely to produce stable and defensible outcomes, making them suitable for initial deployment and pilot testing.
 
-2. **Counties requiring additional oversight:** [List counties with moderate confidence data and describe what kind of monitoring would be needed]
+2. **Counties requiring additional oversight:** 
+Counties like Cameroon, Carbon, Elk, Forest, Greene, Montour, Snyder, Sullivan, Union and Warren have **Moderate Confidence** data and should be included cautiously, with active monitoring and safeguards in place. While estimates in these counties are generally usable, elevated margins of error increase the risk of inconsistent outcomes over time. The Department should implement routine validation checks, track algorithmic outputs against observed service needs, and adjust thresholds as new data becomes available to ensure that communities are not inadvertently disadvantaged.
 
-3. **Counties needing alternative approaches:** [List counties with low confidence data and suggest specific alternatives - manual review, additional surveys, etc.]
+3. **Counties needing alternative approaches:** 
+Counties classified as **Low Confidence** pose the highest risk for algorithmic bias due to substantial data uncertainty. In these areas, reliance on automated systems alone could result in inaccurate prioritization or exclusion of high-need populations. The Department should adopt alternative strategies such as manual case review, targeted community outreach, supplemental surveys, integration of administrative and local data sources before using algorithmic tools to guide funding or service decisions.
 
 ## Questions for Further Investigation
 
-[List 2-3 questions that your analysis raised that you'd like to explore further in future assignments. Consider questions about spatial patterns, time trends, or other demographic factors.]
+1. How do margins of error for key indicators change over time, and are certain counties consistently classified as low confidence across multiple ACS years? How are the margin of errors updated over time to improve reliability?
+
+2. How does incorporating margins of error directly into algorithmic weighting schemes affect funding allocations and equity outcomes compared to traditional point-estimate models?
+
+3. Are data reliability issues spatially clustered within specific regions of Pennsylvania, such as rural areas or post-industrial communities?
 
 # Technical Notes
 
 **Data Sources:** 
 - U.S. Census Bureau, American Community Survey 2018-2022 5-Year Estimates
-- Retrieved via tidycensus R package on [date]
+- Retrieved via tidycensus R package on February 3rd, 2026
 
 **Reproducibility:** 
 - All analysis conducted in R version [your version]
 - Census API key required for replication
-- Complete code and documentation available at: [your portfolio URL]
+- Complete code and documentation available at: https://chavanindrajeet.github.io/IC_PPARep/
 
 **Methodology Notes:**
-[Describe any decisions you made about data processing, county selection, or analytical choices that might affect reproducibility]
+**1.** The county selection for tract-level analysis was based on data reliability categories derived from margins of error, which introduces a subjective element in defining thresholds for “high,” “moderate,” and “low” confidence. While these thresholds follow common practice, alternative cutoffs could yield different county groupings. 
+
+**2.** The demographic percentages and margins of error were calculated using ACS 5-year estimates, which represent pooled data across multiple years and may not reflect short-term changes. 
+
+**3.** The tracts with zero or very small population estimates were implicitly affected by percentage and MOE calculations, potentially inflating uncertainty measures. 
+
+**4.** The analysis relies on a single ACS year and excludes supplemental administrative data, meaning results are sensitive to data availability and census survey limitations.
 
 **Limitations:**
-[Note any limitations in your analysis - sample size issues, geographic scope, temporal factors, etc.]
-
+Although no counties or census tracts fall into the low-reliability category, several areas exhibit moderate reliability with areas that are close to the threshold for low reliability. These areas may not fully represent the actual conditions within Philadelphia.
 ---
 
 ## Submission Checklist
 
 Before submitting your portfolio link on Canvas:
 
-- [ ] All code chunks run without errors
-- [ ] All "[Fill this in]" prompts have been completed
-- [ ] Tables are properly formatted and readable
-- [ ] Executive summary addresses all four required components
-- [ ] Portfolio navigation includes this assignment
-- [ ] Census API key is properly set 
-- [ ] Document renders correctly to HTML
+- [ Y ] All code chunks run without errors
+- [ Y ] All "[Fill this in]" prompts have been completed
+- [ Y ] Tables are properly formatted and readable
+- [ Y ] Executive summary addresses all four required components
+- [ Y ] Portfolio navigation includes this assignment
+- [ Y ] Census API key is properly set 
+- [ Y ] Document renders correctly to HTML
 
 **Remember:** Submit your portfolio URL on Canvas, not the file itself. Your assignment should be accessible at `your-portfolio-url/labs/lab_1/your_file_name.html`
