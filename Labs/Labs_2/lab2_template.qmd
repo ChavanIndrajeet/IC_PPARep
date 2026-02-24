@@ -48,12 +48,23 @@ Load the required spatial data:
 **Your Task:**
 ```{r}
 # Load required packages
+library(tidyverse)
+library(tidycensus)
+library(dplyr)
+library(sf)
+library(tigris)
+library(scales)
+library(patchwork)
+library(here)
 
+setwd("/Users/indrajeetchavan/Library/CloudStorage/OneDrive-PennO365/Penn/6. Penn Sem 2/CPLN 5920 PPA/GitHub/IC_PPARep/Labs")
 
 # Load spatial data
-
-
-
+pa_counties <- st_read(here("Data/Pennsylvania_County_Boundaries.shp"))
+districts <- st_read(here("Data/districts.geojson"))
+hospitals <- st_read(here("Data/hospitals.geojson"))
+census_tracts <- tracts(state = "PA", cb = TRUE)
+metro_areas <- core_based_statistical_areas(cb = TRUE)
 
 # Check that all data loaded correctly
 

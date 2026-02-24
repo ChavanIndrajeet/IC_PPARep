@@ -25,7 +25,7 @@ library(scales)
 library(patchwork)
 library(here)
 # Set your Census API key if you haven't already
-census_api_key(Sys.getenv("9c944699f65b68893c6c529610f655faeec5d440"))
+census_api_key(Sys.getenv("CENSUS_API_KEY"))
 
 # Load the data (same as lecture)
 pa_counties <- st_read(here("data/Pennsylvania_County_Boundaries.shp"))
@@ -57,7 +57,7 @@ unique(pa_counties$COUNTY_NAM)
 
 # Step 2: Pick one county (change this to your choice!)
 my_county <- pa_counties %>%
-  filter(COUNTY_NAM == "DAUPHIN")  # Change "CENTRE" to your county. Thus, using DAUPHIN County for my exercise
+  filter(COUNTY_NAM == "CENTRE")  # Change "CENTRE" to your county
 
 # Step 3: Find neighbors using st_touches
 my_neighbors <- pa_counties %>%
@@ -75,10 +75,10 @@ print(my_neighbors$COUNTY_NAM)
 
 ```{r}
 # Create the map
-p1 <- ggplot() +
+ggplot() +
   geom_sf(data = pa_counties, fill = "lightgray", color = "white") +
-  geom_sf(data = my_neighbors, fill = "lightcoral", color = "white", alpha = 0.7) +
-  geom_sf(data = my_county, fill = "#624948", color = "white") +
+  geom_sf(data = my_neighbors, fill = "lightblue", alpha = 0.7) +
+  geom_sf(data = my_county, fill = "darkblue") +
   labs(
     title = paste("Neighbors of", my_county$COUNTY_NAM[1], "County"),
     subtitle = paste(nrow(my_neighbors), "neighboring counties")
@@ -98,25 +98,9 @@ intersecting_counties <- pa_counties %>%
 cat("With st_touches:", nrow(my_neighbors), "counties\n")
 cat("With st_intersects:", nrow(intersecting_counties), "counties\n")
 cat("Difference:", nrow(intersecting_counties) - nrow(my_neighbors), "\n")
-
-# Create the map
-p2 <- ggplot() +
-  geom_sf(data = pa_counties, fill = "lightgray", color = "white") +
-  geom_sf(data = intersecting_counties, fill = "lightblue", color = "white", alpha = 0.7) +
-  geom_sf(data = my_county, color = "Yellow") +
-  labs(
-    title = paste("Intersecting Counties of", intersecting_counties$COUNTY_NAM[1], "County"),
-    subtitle = paste(nrow(intersecting_counties), "intersecting counties")
-  ) +
-  theme_void()
-
-p1 | p2
-
 ```
 
 **Question:** Why is there a difference of 1? What does this tell you about the difference between `st_touches` and `st_intersects`?
-
-**The difference of 1 clearly shows the way commands operate. `st_intersects` command includes Dauphin County as technically the county intersects with itself. Whereas the `st_touches` command calculates all the counties that touch the boundary in consideration, in this case Dauphin County.**
 
 ---
 
@@ -136,7 +120,7 @@ hospitals_with_county <- hospitals %>%
 
 # Filter for your county's hospitals
 my_county_hospitals <- hospitals_with_county %>%
-  filter(COUNTY_NAM == "DAUPHIN")  # Change to match your county
+  filter(COUNTY_NAM == "CENTRE")  # Change to match your county
 
 cat("Number of hospitals in county:", nrow(my_county_hospitals), "\n")
 
@@ -158,9 +142,9 @@ hospital_service_areas <- st_transform(hospital_service_areas, st_crs(pa_countie
 
 ```{r}
 ggplot() +
-  geom_sf(data = hospital_service_areas, fill = "lightblue", color = "white",alpha = 0.4) +
+  geom_sf(data = my_county, fill = "white", color = "gray") +
+  geom_sf(data = hospital_service_areas, fill = "lightblue", alpha = 0.4) +
   geom_sf(data = my_county_hospitals, color = "red", size = 2) +
-  geom_sf(data = my_county, fill = NA, color = "black") +
   labs(
     title = paste("Hospital Service Areas in", my_county$COUNTY_NAM[1], "County"),
     subtitle = "Red points = Hospitals, Blue areas = 15-mile service zones"
@@ -195,8 +179,6 @@ cat("Coverage:", round(coverage_pct, 1), "%\n")
 ```
 
 **Question:** Is your county well-served by hospitals? What areas might be underserved?
-
-**The Dauphin County is well served as the hosptials in the county cover 66.1% of the total area through their hospital services. The northern part of the county is underserved. We will have to analyse the neighboring counties to ensure if these areas are actually underserved or covered by hospitals located in neighboring counties** 
 
 ---
 
@@ -330,7 +312,7 @@ area_comparison <- pa_counties %>%
   st_transform(4326) %>%
   mutate(area_geographic = as.numeric(st_area(.))) %>%
   # PA State Plane South - Good for PA
-  st_transform(3365) %>%
+  st_transform(32129) %>%
   mutate(area_state_plane = as.numeric(st_area(.))) %>%
   # Albers Equal Area - Good for areas
   st_transform(5070) %>%
@@ -340,7 +322,7 @@ area_comparison <- pa_counties %>%
   mutate(
     # Calculate errors compared to Albers (most accurate for area)
     error_geographic_pct = abs(area_geographic - area_albers) / area_albers * 100,
-    error_state_plane_pct = abs(area_state_plane - area_albers) / area_state_plane * 100
+    error_state_plane_pct = abs(area_state_plane - area_albers) / area_albers * 100
   )
 
 # Show counties with biggest errors
@@ -377,8 +359,6 @@ ggplot(counties_with_errors) +
 ```
 
 **Question:** Which counties have the largest errors? Why might this be?
-
-The error in areas increases from South to North. The highest errors are seen in the northen part of the state while using geographic coordinates (WGS84). This is because the WGS84 is more accurate for projecting areas closer to the south of Pennsylvania State as represented by the visualisation
 
 ---
 

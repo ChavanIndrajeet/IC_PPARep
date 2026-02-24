@@ -15,14 +15,14 @@ census_api_key(Sys.getenv("CENSUS_API_KEY"), install=TRUE, overwrite=TRUE)
 # ACCESS DATA -------------------------------------------------------------
 
 # Read a shapefile
-pa_counties <- st_read("Data/Pennsylvania_County_Boundaries.shp")
+pa_counties <- st_read("data/Pennsylvania_County_Boundaries.shp")
 glimpse(pa_counties)
 # Note: this shapefile doesn't have GEOID, a helpful unique identifier.
 
 
 # Read GeoJSON
-districts <- st_read("Data/districts.geojson")
-hospitals <- st_read("Data/hospitals.geojson")
+districts <- st_read("data/districts.geojson")
+hospitals <- st_read("data/hospitals.geojson")
 #make crs the same (will go over later!)
 hospitals <- hospitals %>%
   st_transform(st_crs(pa_counties))
@@ -47,6 +47,8 @@ census_tracts <- census_tracts %>%
 metro_areas <- core_based_statistical_areas(cb = TRUE)
 metro_areas <- metro_areas %>%
   st_transform(st_crs(pa_counties))
+
+
 
 # EXPLORE COUNTIES --------------------------------------------------------
 
@@ -75,6 +77,8 @@ plot(st_geometry(pa_counties))
 ggplot(pa_counties) +
   geom_sf() +
   theme_void()
+
+
 
 # SPATIAL SUBSETTING + MAPPING --------------------------------------------
 

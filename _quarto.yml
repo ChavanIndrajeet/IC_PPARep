@@ -14,6 +14,8 @@ website:
             text: "Lab 0: dplyr Basics"
           - href: Labs/Labs_1/lab1_IC.qmd
             text: "Lab 1: Census Data Exploration"
+          - href: Labs/Labs_2/lab2_IC.qmd
+            text: "Lab 2: Spatial Analysis and Visualization"
 
 format:
   html:
