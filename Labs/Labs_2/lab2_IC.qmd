@@ -658,8 +658,8 @@ phl_tracts <- phl_tracts %>%
 
 phl_tracts <- phl_tracts %>%
   mutate(
-    total_park_area.x = replace_na(total_park_area.x, 0),
-    park_area_per_capita = as.numeric(total_park_area.x) / total_pop
+    total_park_area = replace_na(total_park_area, 0),
+    park_area_per_capita = as.numeric(total_park_area) / total_pop
   )
 
 #Summarising
