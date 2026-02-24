@@ -654,10 +654,12 @@ park_area_summary <- parks_intersect %>%
   summarise(total_park_area = sum(park_area))
 
 phl_tracts <- phl_tracts %>%
-  left_join(park_area_summary, by = "GEOID") %>%
+  left_join(park_area_summary, by = "GEOID")
+
+phl_tracts <- phl_tracts %>%
   mutate(
-    total_park_area = replace_na(total_park_area, 0),
-    park_area_per_capita = as.numeric(total_park_area) / total_pop
+    total_park_area.x = replace_na(total_park_area.x, 0),
+    park_area_per_capita = as.numeric(total_park_area.x) / total_pop
   )
 
 #Summarising
