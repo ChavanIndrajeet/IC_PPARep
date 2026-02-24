@@ -509,29 +509,11 @@ Choose your own additional spatial dataset and conduct a supplementary analysis.
 
 ### Challenge Options
 
-Choose ONE of the following challenge exercises, or propose your own research question using OpenDataPhilly data (https://opendataphilly.org/datasets/). 
+I have choosen Environmental Justice for my own research question using OpenDataPhilly data (https://opendataphilly.org/datasets/). 
 
 **Note these are just loose suggestions to spark ideas - follow or make your own as the data permits and as your ideas evolve. This analysis should include bringing in your own dataset, ensuring the projection/CRS of your layers align and are appropriate for the analysis (not lat/long or geodetic coordinate systems). The analysis portion should include some combination of spatial and attribute operations to answer a relatively straightforward question**
 
 ---
-
-#### Education & Youth Services
-
-**Option A: Educational Desert Analysis**
-- **Data:** Schools, Libraries, Recreation Centers, Census tracts (child population)
-- **Question:** "Which neighborhoods lack adequate educational infrastructure for children?"
-- **Operations:** Buffer schools/libraries (0.5 mile walking distance), identify coverage gaps, overlay with child population density
-
-- **Policy relevance:** School district planning, library placement, after-school program siting
-
-**Option B: School Safety Zones**
-- **Data:** Schools, Crime Incidents, Bike Network
-- **Question:** "Are school zones safe for walking/biking, or are they crime hotspots?"
-- **Operations:** Buffer schools (1000ft safety zone), spatial join with crime incidents, assess bike infrastructure coverage
-- **Policy relevance:** Safe Routes to School programs, crossing guard placement
-
----
-
 #### Environmental Justice
 
 **Option C: Green Space Equity** 
@@ -539,55 +521,6 @@ Choose ONE of the following challenge exercises, or propose your own research qu
 - **Question:** "Do low-income and minority neighborhoods have equitable access to green space?"
 - **Operations:** Buffer parks (10-minute walk = 0.5 mile), calculate tree canopy or park acreage per capita, compare by demographics
 - **Policy relevance:** Climate resilience, environmental justice, urban forestry investment
----
-
-#### Public Safety & Justice
-
-**Option D: Crime & Community Resources**
-- **Data:** Crime Incidents, Recreation Centers, Libraries, Street Lights
-- **Question:** "Are high-crime areas underserved by community resources?"
-- **Operations:** Aggregate crime counts to census tracts or neighborhoods, count community resources per area, spatial correlation analysis
-- **Policy relevance:** Community investment, violence prevention strategies
----
-
-#### Infrastructure & Services
-
-**Option E: Polling Place Accessibility**
-- **Data:** Polling Places, SEPTA stops, Census tracts (elderly population, disability rates)
-- **Question:** "Are polling places accessible for elderly and disabled voters?"
-- **Operations:** Buffer polling places and transit stops, identify vulnerable populations, find areas lacking access
-- **Policy relevance:** Voting rights, election infrastructure, ADA compliance
-
----
-
-#### Health & Wellness
-
-**Option F: Recreation & Population Health**
-- **Data:** Recreation Centers, Playgrounds, Parks, Census tracts (demographics)
-- **Question:** "Is lack of recreation access associated with vulnerable populations?"
-- **Operations:** Calculate recreation facilities per capita by neighborhood, buffer facilities for walking access, overlay with demographic indicators
-- **Policy relevance:** Public health investment, recreation programming, obesity prevention
-
----
-
-#### Emergency Services
-
-**Option G: EMS Response Coverage**
-- **Data:** Fire Stations, EMS stations, Population density, High-rise buildings
-- **Question:** "Are population-dense areas adequately covered by emergency services?"
-- **Operations:** Create service area buffers (5-minute drive = ~2 miles), assess population coverage, identify gaps in high-density areas
-- **Policy relevance:** Emergency preparedness, station siting decisions
-
----
-
-#### Arts & Culture
-
-**Option H: Cultural Asset Distribution**
-- **Data:** Public Art, Museums, Historic sites/markers, Neighborhoods
-- **Question:** "Do all neighborhoods have equitable access to cultural amenities?"
-- **Operations:** Count cultural assets per neighborhood, normalize by population, compare distribution across demographic groups
-- **Policy relevance:** Cultural equity, tourism, quality of life, neighborhood identity
-
 ---
 
 ### Data Sources
@@ -601,15 +534,6 @@ Choose ONE of the following challenge exercises, or propose your own research qu
 - **Census Bureau (via tidycensus):** Demographics, economic indicators, commute patterns
 - **TIGER/Line (via tigris):** Geographic boundaries
 
-### Recommended Starting Points
-
-**If you're feeling confident:** Choose an advanced challenge with multiple data layers. 
-**If you are a beginner, choose something more manageable that helps you understand the basics**
-
-**If you have a different idea:** Propose your own question! Just make sure:
-- You can access the spatial data
-- You can perform at least 2 spatial operations
-
 ### Your Analysis
 
 **Your Task:**
@@ -621,55 +545,140 @@ Choose ONE of the following challenge exercises, or propose your own research qu
 
 ```{r}
 # Load your additional dataset
+library(sf)
+library(tidyverse)
+library(tidycensus)
+library(tigris)
 
+options(tigris_use_cache = TRUE)
 
+# Load Philadelphia tracts
+phl_tracts <- tracts(state = "PA", county = "Philadelphia", year = 2022)
 
+# Load parks layer (downloaded from OpenDataPhilly)
+parks <- st_read("/Users/indrajeetchavan/Library/CloudStorage/OneDrive-PennO365/Penn/6. Penn Sem 2/CPLN 5920 PPA/GitHub/IC_PPARep/Labs/Labs_2/Data/PPR_Districts_2018-shp/6f10cbdb-1ec2-4b34-be5a-4e6161932270202041-1-20jrvr.q31lf.shp")
+
+# Check CRS
+st_crs(phl_tracts)
+st_crs(parks)
 
 ```
 
 **Questions to answer:**
 - What dataset did you choose and why?
+Philadelphia Parks (polygon layer) – park boundaries
+Census Tracts (ACS demographics) – income + race
+
+I chose this data set as it directly relates to environmental justice, has clean polygon data, allows buffers, intersection, and aggregation. Besides the data has a strong policy relevance (urban heat, tree canopy, recreation).
+
 - What is the data source and date?
+OpenDataPhilly, 2018
+
 - How many features does it contain?
+Parks layer (GeoJSON or Shapefile)
+
 - What CRS is it in? Did you need to transform it?
+phl_tracts: "EPSG",4269 NAD83 
+parks: "EPSG",2272 NAD83 / Pennsylvania South (ftUS) 
 
 ---
 
 2. **Pose a research question**
 
-Write a clear research statement that your analysis will answer.
-
-**Examples:**
-- "Do vulnerable tracts have adequate public transit access to hospitals?"
-- "Are EMS stations appropriately located near vulnerable populations?"
-- "Do areas with low vehicle access have worse hospital access?"
+**Do low-income census tracts in Philadelphia have less access to parks within a 0.5-mile walking distance?**
 
 ---
 
 3. **Conduct spatial analysis**
 
-Use at least TWO spatial operations to answer your research question.
-
-**Required operations (choose 2+):**
-- Buffers
-- Spatial joins
-- Spatial filtering with predicates
-- Distance calculations
-- Intersections or unions
-- Point-in-polygon aggregation
+Operations I will be focusing on will be:
+CRS transformation
+Buffer analysis
+Intersection
+Park acreage per tract
+Per capita comparison
 
 **Your Task:**
 ```{r}
 # Your spatial analysis
 
+#transform CRS
+phl_tracts <- st_transform(phl_tracts, 32129)
+parks <- st_transform(parks, 32129)
 
+#Get demographic data
+acs_vars <- c(
+  total_pop = "B01003_001",
+  median_income = "B19013_001",
+  white = "B02001_002",
+  black = "B02001_003"
+)
 
+acs_data <- get_acs(
+  geography = "tract",
+  variables = acs_vars,
+  state = "PA",
+  county = "Philadelphia",
+  year = 2022
+)
 
+acs_wide1 <- acs_data %>%
+  select(GEOID, variable, estimate) %>%
+  pivot_wider(names_from = variable, values_from = estimate)
 
+phl_tracts <- phl_tracts %>%
+  left_join(acs_wide1, by = "GEOID")
 
+#Define Low income tracts
+city_median_income <- median(phl_tracts$median_income, na.rm = TRUE)
 
+phl_tracts <- phl_tracts %>%
+  mutate(low_income = median_income < city_median_income)
 
+#Buffer Parks
+parks_buffer <- st_buffer(parks, dist = 804.67) #0.5 Mile = 804.67 meters
 
+#Intersect buffers with tracts
+tracts_with_access <- st_intersects(phl_tracts, parks_buffer, sparse = FALSE)
+
+phl_tracts$park_access <- apply(tracts_with_access, 1, any)
+
+#Calculate Park Area per tract
+parks_intersect <- st_intersection(phl_tracts, parks)
+
+parks_intersect$park_area <- st_area(parks_intersect)
+
+park_area_summary <- parks_intersect %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarise(total_park_area = sum(park_area))
+
+phl_tracts <- phl_tracts %>%
+  left_join(park_area_summary, by = "GEOID") %>%
+  mutate(
+    total_park_area = replace_na(total_park_area, 0),
+    park_area_per_capita = as.numeric(total_park_area) / total_pop
+  )
+
+#Summarising
+phl_tracts %>%
+  group_by(low_income) %>%
+  summarise(
+    avg_park_area_per_capita = mean(park_area_per_capita, na.rm = TRUE),
+    percent_with_access = mean(park_access) * 100
+  )
+
+#Spatial Mapping
+ggplot() +
+  geom_sf(data = parks, fill = "green") +
+  geom_sf(data = phl_tracts, aes(fill = park_area_per_capita)) +
+  scale_fill_viridis_c() +
+  labs(
+    title = "Park Access Equity in Philadelphia",
+    subtitle = "Park Area Per Capita by Census Tract",
+    fill = "Park Area per Capita"
+  ) +
+  theme_void()
 
 ```
 
@@ -682,11 +691,12 @@ Use at least TWO spatial operations to answer your research question.
 
 **Your interpretation:**
 
-[Write your findings here]
+**The analysis suggests that park access is unevenly distributed across Philadelphia. While many tracts are within 0.5 miles of a park, park acreage per capita varies significantly. Low-income tracts, on average, have lower park area per capita compared to higher-income tracts, indicating potential environmental justice concerns. Although spatial proximity may exist, the quantity and size of green space available to residents differ substantially, which has implications for climate resilience, heat mitigation, and public health outcomes.**
 
 
 ## Finally - A few comments about your incorporation of feedback!
-Take a few moments to clean up your markdown document and then write a line or two or three about how you may have incorporated feedback that you recieved after your first assignment. 
+
+**Compared to my first assignment, I incorporated feedback by improving CRS management and clearly transforming all spatial layers into a projected coordinate system before conducting distance and area calculations. Additionally, I strengthened my interpretation by distinguishing between percentage-based disparities and absolute population impacts, making the policy implications clearer.**
 
 ---
 
