@@ -1,8 +1,8 @@
 ---
 title: "Lab 2: Spatial Analysis and Visualization"
 subtitle: "Healthcare Access and Equity in Pennsylvania"
-author: Indrajeet Chavan
-date: February 23, 2026
+author: "Indrajeet Chavan"
+date: "February 23, 2026"
 format: 
   html:
     code-fold: false
@@ -171,6 +171,7 @@ median(tracts_pa$median_income, na.rm = TRUE)
 
 - What is the median income across all PA census tracts?
 **70188**
+
 ---
 
 #### Step 3: Define Vulnerable Populations 
@@ -305,6 +306,7 @@ mean(tracts_proj$underserved[tracts_proj$vulnerable], na.rm = TRUE) * 100
 **2. Vulnerability and long-distance access don’t always overla**
 **3. Fifteen miles is a fairly large service radius**
 **4. Though small, the percentage can still represent a huge population based on which tracts come under these tracts.**
+
 ---
 
 #### Step 6: Aggregate to County Level
@@ -369,6 +371,7 @@ head(county_summary, 5)
 
 - Are there any patterns in where underserved counties are located?
 **There is a clear spatial pattern in the distribution of underserved counties. Counties with the highest percentage of underserved vulnerable tracts are predominantly rural with low population density. These areas likely face structural healthcare access challenges due to limited hospital infrastructure and large geographic distances. In contrast, counties with the greatest number of vulnerable residents living far from hospitals are highly populated urban counties such as Philadelphia and Allegheny. Thus high absolute numbers of vulnerable residents affected. We see rural spatial isolation and urban scale-based disparities.**
+
 ---
 
 #### Step 7: Create Summary Table 
@@ -514,6 +517,7 @@ I have choosen Environmental Justice for my own research question using OpenData
 **Note these are just loose suggestions to spark ideas - follow or make your own as the data permits and as your ideas evolve. This analysis should include bringing in your own dataset, ensuring the projection/CRS of your layers align and are appropriate for the analysis (not lat/long or geodetic coordinate systems). The analysis portion should include some combination of spatial and attribute operations to answer a relatively straightforward question**
 
 ---
+
 #### Environmental Justice
 
 **Option C: Green Space Equity** 
@@ -521,6 +525,7 @@ I have choosen Environmental Justice for my own research question using OpenData
 - **Question:** "Do low-income and minority neighborhoods have equitable access to green space?"
 - **Operations:** Buffer parks (10-minute walk = 0.5 mile), calculate tree canopy or park acreage per capita, compare by demographics
 - **Policy relevance:** Climate resilience, environmental justice, urban forestry investment
+
 ---
 
 ### Data Sources
@@ -713,4 +718,3 @@ ggplot() +
 2. Submit the correct and working links of your assignment on Canvas
 
 ---
-
