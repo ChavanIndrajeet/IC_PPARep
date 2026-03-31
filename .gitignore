@@ -6,4 +6,5 @@
 /.quarto/
 **/*.quarto_ipynb
 
-Labs/Labs_3/
+Labs/Labs_3/Data
+Labs/Labs_4/Data
