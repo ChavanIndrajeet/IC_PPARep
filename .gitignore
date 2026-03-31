@@ -6,4 +6,6 @@
 /.quarto/
 **/*.quarto_ipynb
 
-Labs/Labs_3/
+Labs/Labs_3/Data
+Labs/Labs_4/Data
+Labs/Labs_4/Data/311_Service_Requests_-_Graffiti_Removal_-_Historical_20260329.csv 15-32-33-611.csv
