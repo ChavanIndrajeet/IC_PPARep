@@ -1,0 +1,368 @@
+---
+title: "Lab 4: Spatial Predictive Analysis"
+subtitle: "Analyzing 311 Violations"
+author: "Indrajeet Chavan"
+date: today
+format: 
+  html:
+    code-fold: false
+    toc: true
+    toc-location: left
+    theme: cosmo
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+## Assignment Overview
+
+In this lab, you will apply the spatial predictive modeling techniques demonstrated 
+in the class exercise using a different 311 service request type of your choice as the predictor variable. You will build a complete spatial predictive model, document your process, and interpret your results.
+
+### Learning Objectives
+
+By completing this assignment, you will demonstrate your ability to:
+
+- Adapt example code to analyze a new dataset
+- Build spatial features for predictive modeling
+- Apply count regression techniques to spatial data
+- Implement spatial cross-validation
+- Interpret and communicate model results
+- Critically evaluate model performance
+
+---
+
+## Step 1: Choose Your 311 Violation Type
+
+### Getting the Data and Requirements for Your Choice
+
+After visiting the Chicago 311 Service Requests dataset, I have choosen a **different** violation type than the abandoned cars. 
+The violations chosen are **Graffiti Removal and Vacant & Abandoned Buildings Reported**.
+
+---
+
+## Step 2: Complete the Analysis
+
+Using the class exercises I have adapted the code to analyze your chosen 311 violation type.
+
+### Overview of the assignment:
+
+Work through all major sections of the analysis:
+
+### Part 1: Data Loading & Exploration
+Tasks in this section -
+- Load your 311 data and Chicago spatial boundaries
+- Create visualizations showing the spatial distribution of your violation type
+- Describe patterns you observe
+
+---
+
+```{r}
+#| message: false
+#| warning: false
+
+# Load required packages
+library(tidyverse)      # Data manipulation
+library(sf)             # Spatial operations
+library(here)           # Relative file paths
+library(viridis)        # Color scales
+library(terra)          # Raster operations (replaces 'raster')
+library(spdep)          # Spatial dependence
+library(FNN)            # Fast nearest neighbors
+library(MASS)           # Negative binomial regression
+library(patchwork)      # Plot composition (replaces grid/gridExtra)
+library(knitr)          # Tables
+library(kableExtra)     # Table formatting
+library(classInt)       # Classification intervals
+
+
+# Spatstat for analyzing point patterns - split into sub-packages
+library(spatstat.geom)    # Spatial geometries
+library(spatstat.explore) # Spatial exploration/KDE
+
+# Set options
+options(scipen = 999)  # No scientific notation
+set.seed(5080)         # Reproducibility, could be any number
+
+# Create consistent theme for visualizations
+theme_crime <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title = element_text(face = "bold", size = base_size + 1),
+      plot.subtitle = element_text(color = "gray30", size = base_size - 1),
+      legend.position = "right",
+      panel.grid.minor = element_blank(),
+      axis.text = element_blank(),
+      axis.title = element_blank()
+    )
+}
+
+# Set as default
+theme_set(theme_crime())
+
+cat("✓ All packages loaded successfully!\n")
+cat("✓ Working directory:", getwd(), "\n")
+
+```
+
+#### Exercise 1.1: Load Chicago Spatial Data
+
+```{r}
+# Load police districts (used for spatial cross-validation)
+policeDistricts <- 
+  st_read("https://data.cityofchicago.org/api/geospatial/24zt-jpfn?method=export&format=GeoJSON") %>%
+  st_transform('ESRI:102271') %>%
+  dplyr::select(District = dist_num)
+
+# Load police beats (smaller administrative units)
+policeBeats <- 
+  st_read("https://data.cityofchicago.org/api/geospatial/n9it-hstw?method=export&format=GeoJSON") %>%
+  st_transform('ESRI:102271') %>%
+  dplyr::select(Beat = beat_num)
+
+# Load Chicago boundary
+chicagoBoundary <- 
+  st_read("https://raw.githubusercontent.com/urbanSpatial/Public-Policy-Analytics-Landing/master/DATA/Chapter5/chicagoBoundary.geojson") %>%
+  st_transform('ESRI:102271')
+
+cat("✓ Loaded spatial boundaries\n")
+cat("  - Police districts:", nrow(policeDistricts), "\n")
+cat("  - Police beats:", nrow(policeBeats), "\n")
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+- It minimizes distortion in this region
+- Uses feet (common in US planning)
+- Allows accurate distance calculations
+
+---
+
+#### Exercise 1.2: Load Burglary Data
+
+```{r}
+#| message: false
+
+# Load from provided data file (downloaded from Chicago open data portal)
+burglaries <- st_read(here("Data", "burglaries.shp")) %>% 
+  st_transform('ESRI:102271')
+
+glimpse(burglaries)
+
+# Check the data
+cat("\n✓ Loaded burglary data\n")
+cat("  - Number of burglaries:", nrow(burglaries), "\n")
+cat("  - CRS:", st_crs(burglaries)$input, "\n")
+cat("  - Date range:", format(min(burglaries$Date, na.rm = TRUE)), "to", 
+    format(max(burglaries$Date, na.rm = TRUE)), "\n")
+
+```
+
+**Takeaways:**
+Question 1.1: How many burglaries are in the dataset? What time period does this cover? Why does the coordinate reference system matter for our spatial analysis?
+
+Your answer here:
+Number of Burglaries: 7482
+Time period: 2017-01-01 to 2018-01-01
+The coordinate reference system for Chicago matters because:
+- It minimizes distortion in this region
+- Uses feet (common in US planning)
+- Allows accurate distance calculations
+
+---
+
+#### Exercise 1.3: Visualize Point Data
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+
+# Simple point map
+p1 <- ggplot() + 
+  geom_sf(data = chicagoBoundary, fill = "gray95", color = "gray60") +
+  geom_sf(data = burglaries, color = "#d62828", size = 0.1, alpha = 0.4) +
+  labs(
+    title = "Burglary Locations",
+    subtitle = paste0("Chicago 2017, n = ", nrow(burglaries))
+  )
+
+# Density surface using modern syntax
+p2 <- ggplot() + 
+  geom_sf(data = chicagoBoundary, fill = "gray95", color = "gray60") +
+  geom_density_2d_filled(
+    data = data.frame(st_coordinates(burglaries)),
+    aes(X, Y),
+    alpha = 0.7,
+    bins = 8
+  ) +
+  scale_fill_viridis_d(
+    option = "plasma",
+    direction = -1,
+    guide = "none"  # Modern ggplot2 syntax (not guide = FALSE)
+  ) +
+  labs(
+    title = "Density Surface",
+    subtitle = "Kernel density estimation"
+  )
+
+# Combine plots using patchwork (modern approach)
+p1 + p2 + 
+  plot_annotation(
+    title = "Spatial Distribution of Burglaries in Chicago",
+    tag_levels = 'A'
+  )
+
+```
+
+**Takeaways:**
+Question 1.2: What spatial patterns do you observe? Are burglaries evenly distributed across Chicago? Where are the highest concentrations? What might explain these patterns?
+
+Your answer here:
+
+---
+
+### Part 2: Fishnet Grid Creation
+- Create a 500m x 500m fishnet grid
+- Aggregate your violations to grid cells
+- Visualize the count distribution
+
+---
+
+#### Exercise 
+
+```{r}
+
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+---
+
+#### Exercise 
+
+```{r}
+
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+---
+
+#### Part 3: Spatial Features
+- Calculate k-nearest neighbor features
+- Perform Local Moran's I analysis
+- Identify hot spots and cold spots
+- Create distance-to-hotspot measures
+- Join any additional contextual data if you are looking for more to do and really get into this (e.g., demographics, land use)
+
+#### Part 4: Count Regression Models
+- Fit Poisson regression
+- Fit Negative Binomial regression
+- Compare model fit (AIC)
+
+#### Part 5: Spatial Cross-Validation (2017)
+- Implement Leave-One-Group-Out cross-validation on 2017 data
+- Calculate and report error metrics (MAE, RMSE)
+
+#### Part 6: Model Evaluation
+- Compare to KDE baseline
+
+#### CHALLENGE TASK: Temporal Validation (2018) *not mandatory, only if you want very strong spatial analytics muscles*
+- Download 2018 crimes https://data.cityofchicago.org/Public-Safety/Crimes-2018/3i3m-jwuy/about_data
+- Be sure to filter for BURGLARIES (FORCED ENTRY only to match the 2017 data)
+- Aggregate 2018 violations to the same fishnet grid
+- Use your 2017 model to predict 2018 counts
+- Calculate temporal validation metrics
+- Compare spatial vs. temporal validation performance
+
+---
+
+## Step 3: Write Your Analysis
+
+### Critical Requirement: Explain Each Step
+
+**For each major section, you must explain in your own words:**
+
+- **What** you are doing in that step
+- **Why** this step is important for the analysis
+- **What** you found or learned from the results
+
+Do not simply copy text from the example or from your AI friend. 
+Think about the purpose of each technique and articulate it in your own words.
+
+---
+
+## Step 4: Format Your Document
+
+### Formatting Requirements
+
+Your rendered HTML document should be **professional and easy to read**:
+
+#### ✓ Clean Code
+- Remove unnecessary code, comments, or debugging lines
+- Keep only essential code chunks
+- Use `code-fold: show` in your YAML header
+
+#### ✓ Clear Structure
+- Use headers to organize sections
+- Include a table of contents
+- Add your name and date
+
+#### ✓ Readable Text
+- Ensure all text renders properly (no broken markdown)
+- Check that headers appear as headers (not plain text)
+- Use proper markdown formatting
+
+#### ✓ Quality Visualizations
+- All plots should have titles and labels
+- Maps should be readable
+- Use consistent color schemes
+
+#### ✓ Professional Presentation
+- Proofread for typos
+- Remove any "Your answer here" placeholders
+- Make sure all code runs without errors
+- Make IT NEAT. WE GOTTA LOOK GOOD HERE.
+
+---
+
+## Submission Checklist
+
+Before you submit, verify that your document includes:
+
+### Required Components
+
+- [ ] **Introduction**: Brief description of your chosen 311 violation type and why you selected it
+- [ ] **Data Exploration**: Maps and summary statistics of your violation data
+- [ ] **Fishnet Grid**: Successfully created and visualized grid with aggregated counts
+- [ ] **Spatial Features**: At least 2-3 spatial features calculated (k-NN, distance measures, etc.)
+- [ ] **Local Moran's I**: Spatial autocorrelation analysis with interpretation
+- [ ] **Count Regression**: Both Poisson and Negative Binomial models with comparison
+- [ ] **Spatial Cross-Validation**: LOGO CV implemented on 2017 data with reported metrics
+- [ ] **Temporal Validation**: 2018 data aggregated and tested with 2017 model(OPTIONAL.)
+- [ ] **Validation Comparison**: Comparison of spatial vs. temporal validation performance
+- [ ] **Model Comparison**: Your model vs. KDE baseline for 2018 predictions
+- [ ] **Error Analysis**: Maps and discussion of where model performs well/poorly
+- [ ] **Written Explanations**: Your own words explaining each step
+
+
+### Technical Requirements
+
+- [ ] Document renders to HTML without errors
+- [ ] Code is clean and well-organized
+- [ ] All visualizations display properly
+- [ ] Headers and formatting render correctly
+- [ ] File is named successfully posted to your website
+
+---
+
+
