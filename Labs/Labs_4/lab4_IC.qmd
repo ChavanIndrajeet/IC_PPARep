@@ -152,14 +152,10 @@ burglaries <- st_read(here("Data", "burglaries.shp")) %>%
   st_transform('ESRI:102271')
 
 glimpse(burglaries)
-glimpse(vacant)
-glimpse(graffiti)
 
 # Check the data
 cat("\n✓ Loaded burglary data\n")
 cat("  - Number of Burglaries:", nrow(burglaries), "\n")
-cat("  - Number of Vacant & Abandoned Buildings:", nrow(vacant), "\n")
-cat("  - Number of Graffiti Violations:", nrow(graffiti), "\n")
 cat("  - CRS:", st_crs(burglaries)$input, "\n")
 cat("  - Date range:", format(min(burglaries$Date, na.rm = TRUE)), "to", 
     format(max(burglaries$Date, na.rm = TRUE)), "\n")
@@ -238,7 +234,7 @@ Your answer here:
 
 ---
 
-#### Exercise 
+#### Exercise: Understanding the Fishnet
 
 ```{r}
 # 2.1 Understanding the Fishnet
@@ -595,24 +591,31 @@ calculate_local_morans <- function(data, variable, k = 5) {
     )
 }
 
+fishnet <- fishnet %>%
+  mutate(
+    vacant_count = lengths(st_intersects(fishnet, vacant_sf)),
+    graffiti_count = lengths(st_intersects(fishnet, graffiti_sf)),
+    burglaries_count = lengths(st_intersects(fishnet, burglaries))
+  )
+
 # Apply to burglaries
 violations_burglary <- calculate_local_morans(
-  violations_sf, 
-  "burglaries",   # <-- change to your actual column name
+  fishnet,
+  "burglaries_count",
   k = 5
 )
 
 # Apply to Vacant & Abandoned Buildings
 violations_vacant <- calculate_local_morans(
-  violations_sf, 
-  "vacant_abandoned_buildings",  # adjust name if needed
+  fishnet,
+  "vacant_count",
   k = 5
 )
 
 # Apply to Graffiti Violations
 violations_graffiti <- calculate_local_morans(
-  violations_sf, 
-  "graffiti_violations",  # adjust name if needed
+  fishnet,
+  "graffiti_count",
   k = 5
 )
 
@@ -657,7 +660,7 @@ ggplot() +
     name = "Cluster Type"
   ) +
   labs(
-    title = "Local Moran's I: Burglary Clusters",
+    title = "Local Moran's I: Vacant & Abandoned Buildings Clusters",
     subtitle = "High-High = Hot spots"
   ) +
   theme_crime()
@@ -680,7 +683,7 @@ ggplot() +
     name = "Cluster Type"
   ) +
   labs(
-    title = "Local Moran's I: Burglary Clusters",
+    title = "Local Moran's I: Graffiti Violation Clusters",
     subtitle = "High-High = Hot spots"
   ) +
   theme_crime()
@@ -737,9 +740,8 @@ Allows accurate distance calculations
 
 ---
 
-#### Part 5: Spatial Cross-Validation (2017)
-- Implement Leave-One-Group-Out cross-validation on 2017 data
-- Calculate and report error metrics (MAE, RMSE)
+#### Part 5: Join Police Districts for Cross-Validation
+We'll use police districts for our spatial cross-validation.
 
 #### Exercise: Distance to Hot Spots
 
@@ -755,8 +757,86 @@ Allows accurate distance calculations
 
 ---
 
-#### Part 6: Model Evaluation
+#### Part 6: 
 - Compare to KDE baseline
+
+#### Exercise: Distance to Hot Spots
+
+```{r}
+
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+---
+#### Part 7: 
+- Compare to KDE baseline
+
+#### Exercise: Distance to Hot Spots
+
+```{r}
+
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+---
+#### Part 8: 
+- Compare to KDE baseline
+
+#### Exercise: Distance to Hot Spots
+
+```{r}
+
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+---
+#### Part 9: 
+- Compare to KDE baseline
+
+#### Exercise: Distance to Hot Spots
+
+```{r}
+
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+---
+#### Part 10: 
+- Compare to KDE baseline
+
+#### Exercise: Distance to Hot Spots
+
+```{r}
+
+```
+
+**Takeaways:**
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+---
 
 #### CHALLENGE TASK: Temporal Validation (2018) *not mandatory, only if you want very strong spatial analytics muscles*
 - Download 2018 crimes https://data.cityofchicago.org/Public-Safety/Crimes-2018/3i3m-jwuy/about_data
