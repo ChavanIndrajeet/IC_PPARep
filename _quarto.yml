@@ -18,6 +18,8 @@ website:
             text: "Lab 2: Spatial Analysis and Visualization"
           - href: Labs/Labs_3/Chavan_Indrajeet_Appendix.qmd
             text: "Lab 3: Philadelphia Housing Price Prediction Model (Technical Appendix)"
+          - href: Labs/Labs_4/lab4_IC.qmd
+            text: "Lab 4: Spatial Predictive Analysis"
 
 format:
   html:
