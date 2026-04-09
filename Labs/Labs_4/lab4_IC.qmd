@@ -2,7 +2,7 @@
 title: "Lab 4: Spatial Predictive Analysis"
 subtitle: "Analyzing 311 Violations"
 author: "Indrajeet Chavan"
-date: today
+date: "April 8th, 2026"
 format: 
   html:
     code-fold: false
@@ -31,16 +31,12 @@ By completing this assignment, you will demonstrate your ability to:
 - Interpret and communicate model results
 - Critically evaluate model performance
 
----
-
 ## Step 1: Choose Your 311 Violation Type
 
 ### Getting the Data and Requirements for Your Choice
 
 After visiting the Chicago 311 Service Requests dataset, I have choosen a **different** violation type than the abandoned cars. 
 The violations chosen are **Graffiti Removal and Vacant & Abandoned Buildings Reported**.
-
----
 
 ## Step 2: Complete the Analysis
 
@@ -55,8 +51,6 @@ Tasks in this section -
 - Load your 311 data and Chicago spatial boundaries
 - Create visualizations showing the spatial distribution of your violation type
 - Describe patterns you observe
-
----
 
 ```{r}
 #| message: false
@@ -109,6 +103,7 @@ cat("✓ Working directory:", getwd(), "\n")
 
 ```
 
+
 #### Exercise 1.1: Load Chicago Spatial Data
 
 ```{r}
@@ -134,13 +129,12 @@ cat("  - Police districts:", nrow(policeDistricts), "\n")
 cat("  - Police beats:", nrow(policeBeats), "\n")
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 - It minimizes distortion in this region
 - Uses feet (common in US planning)
 - Allows accurate distance calculations
 
----
 
 #### Exercise 1.2: Load Burglary Data and 311 Data
 
@@ -162,7 +156,7 @@ cat("  - Date range:", format(min(burglaries$Date, na.rm = TRUE)), "to",
 
 ```
 
-**Takeaways:**
+Takeaways:
 Question 1.1: How many burglaries are in the dataset? What time period does this cover? Why does the coordinate reference system matter for our spatial analysis?
 
 Your answer here:
@@ -174,8 +168,6 @@ The coordinate reference system for Chicago matters because:
 - It minimizes distortion in this region
 - Uses feet (common in US planning)
 - Allows accurate distance calculations
-
----
 
 #### Exercise 1.3: Visualize Data
 
@@ -220,19 +212,16 @@ p1 + p2 +
 
 ```
 
-**Takeaways:**
+Takeaways:
 Question 1.2: What spatial patterns do you observe? Are burglaries evenly distributed across Chicago? Where are the highest concentrations? What might explain these patterns?
 
 Your answer here:
-
----
 
 ### Part 2: Fishnet Grid Creation
 - Create a 500m x 500m fishnet grid
 - Aggregate your violations to grid cells
 - Visualize the count distribution
 
----
 
 #### Exercise: Understanding the Fishnet
 
@@ -300,13 +289,11 @@ ggplot() +
   theme_crime()
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
-
----
 
 #### Part 3: Create a Kernel Density Baseline
 Before building complex models, let's create a simple baseline using Kernel Density Estimation (KDE).
@@ -361,13 +348,11 @@ ggplot() +
   theme_crime()
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
-
----
 
 #### Part 4: Create Spatial Predictor Variables
 Now we'll create features that might help predict burglaries. We'll use "broken windows theory" logic: signs of disorder predict crime.
@@ -420,13 +405,11 @@ cat("✓ Loaded graffiti violations calls\n")
 cat("  - Number of calls:", nrow(graffiti), "\n")
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
-
----
 
 #### Exercise: Count of Vacant & Abandoned Buildings and Graffiti per Cell
 
@@ -492,13 +475,11 @@ pc <- ggplot() +
 
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
-
----
 
 #### Exercise: Nearest Neighbor Features
 
@@ -549,13 +530,11 @@ summary(fishnet$violations.nn)
 
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
-
----
 
 #### Exercise: Distance to Hot Spots
 
@@ -701,6 +680,10 @@ if (nrow(hotspots_burglary) > 0) {
         st_distance(st_centroid(violations_burglary), hotspots_burglary %>% st_union())
       )
     )
+} else {
+  fishnet <- fishnet %>%
+    mutate(dist_to_hotspot = 0)
+  cat("⚠ No significant hot spots found\n")
 }
 
 #Vacant Buildings
@@ -715,6 +698,10 @@ if (nrow(hotspots_vacant) > 0) {
         st_distance(st_centroid(violations_vacant), hotspots_vacant %>% st_union())
       )
     )
+}else {
+  fishnet <- fishnet %>%
+    mutate(dist_to_hotspot = 0)
+  cat("⚠ No significant hot spots found\n")
 }
 
 #Graffiti
@@ -729,16 +716,19 @@ if (nrow(hotspots_graffiti) > 0) {
         st_distance(st_centroid(violations_graffiti), hotspots_graffiti %>% st_union())
       )
     )
+}else {
+  fishnet <- fishnet %>%
+    mutate(dist_to_hotspot = 0)
+  cat("⚠ No significant hot spots found\n")
 }
+
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
-
----
 
 #### Part 5: Join Police Districts for Cross-Validation
 We'll use police districts for our spatial cross-validation.
@@ -747,32 +737,86 @@ We'll use police districts for our spatial cross-validation.
 
 ```{r}
 
+# Join district information to fishnet
+# fishnet <- st_join(
+#   fishnet,
+#   hotspots_burglary,
+#   hotspots_graffiti,
+#   hotspots_vacant,
+#   policeDistricts,
+#   join = st_within,
+#   left = TRUE
+# ) %>%
+#   filter(!is.na(District))  # Remove cells outside districts
+
+# cat("✓ Joined police districts\n")
+# cat("  - Districts:", length(unique(fishnet$District)), "\n")
+# cat("  - Cells:", nrow(fishnet), "\n")
+
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
 
----
+#### Part 6: Model Fitting
 
-#### Part 6: 
-- Compare to KDE baseline
+#### Exercise 6.1: Poisson Regression
+Burglary counts are count data (0, 1, 2, 3...). We'll use Poisson regression.
 
-#### Exercise: Distance to Hot Spots
+```{r}
+# Create clean modeling dataset
+# fishnet_model <- fishnet %>%
+#   st_drop_geometry() %>%
+#   dplyr::select(
+#     uniqueID,
+#     District,
+#     burglaries_count,
+#     vacant_count,
+#     graffiti_count,
+#     violations.nn,
+#     dist_to_hotspot
+#   ) %>%
+#   na.omit()  # Remove any remaining NAs
+
+# cat("✓ Prepared modeling data\n")
+# cat("  - Observations:", nrow(fishnet_model), "\n")
+# cat("  - Variables:", ncol(fishnet_model), "\n")
+# 
+# # Fit Poisson regression
+# model_poisson <- glm(
+#   countBurglaries ~ abandoned_cars + abandoned_cars.nn + 
+#     dist_to_hotspot,
+#   data = fishnet_model,
+#   family = "poisson"
+# )
+# 
+# # Summary
+# summary(model_poisson)
+
+```
+
+Takeaways:
+We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
+It minimizes distortion in this region
+Uses feet (common in US planning)
+Allows accurate distance calculations
+
+#### Exercise 6.2: Poisson Regression
+Burglary counts are count data (0, 1, 2, 3...). We'll use Poisson regression.
 
 ```{r}
 
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
 
----
 #### Part 7: 
 - Compare to KDE baseline
 
@@ -782,13 +826,12 @@ Allows accurate distance calculations
 
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
 
----
 #### Part 8: 
 - Compare to KDE baseline
 
@@ -798,13 +841,12 @@ Allows accurate distance calculations
 
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
 
----
 #### Part 9: 
 - Compare to KDE baseline
 
@@ -814,13 +856,12 @@ Allows accurate distance calculations
 
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
 
----
 #### Part 10: 
 - Compare to KDE baseline
 
@@ -830,13 +871,11 @@ Allows accurate distance calculations
 
 ```
 
-**Takeaways:**
+Takeaways:
 We're using ESRI:102271 (Illinois State Plane East, NAD83, US Feet). This is appropriate for Chicago because:
 It minimizes distortion in this region
 Uses feet (common in US planning)
 Allows accurate distance calculations
-
----
 
 #### CHALLENGE TASK: Temporal Validation (2018) *not mandatory, only if you want very strong spatial analytics muscles*
 - Download 2018 crimes https://data.cityofchicago.org/Public-Safety/Crimes-2018/3i3m-jwuy/about_data
@@ -845,8 +884,6 @@ Allows accurate distance calculations
 - Use your 2017 model to predict 2018 counts
 - Calculate temporal validation metrics
 - Compare spatial vs. temporal validation performance
-
----
 
 ## Step 3: Write Your Analysis
 
@@ -860,8 +897,6 @@ Allows accurate distance calculations
 
 Do not simply copy text from the example or from your AI friend. 
 Think about the purpose of each technique and articulate it in your own words.
-
----
 
 ## Step 4: Format Your Document
 
