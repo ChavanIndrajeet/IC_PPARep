@@ -1,0 +1,131 @@
+---
+title: "Midterm Challenge: Philadelphia Housing Price Prediction (Technical Appendix)"
+subtitle: "MUSA 5080 - Public Policy Analytics"
+author: "Indrajeet Chavan, Wil Rantala, Alajandro Duque, Umair Saad"
+date: "March 16, 2026"
+format: 
+  html:
+    code-fold: false
+    toc: true
+    toc-location: left
+    theme: cosmo
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+#Overview
+
+**The Challenge:**
+Build a predictive model that city officials would actually want to use, using only the techniques we’ve covered this semester.
+
+**The Stakes:**
+Your presentation will be evaluated by a panel of judges (your professor + a surprise guest) who will grill you on your methods, assumptions, and recommendations. You need to demonstrate not just technical competence, but deep understanding of what you’ve built and why it matters.
+
+## Phase 1: Data Cleaning
+
+#### Step 1: Load Libraries
+
+```{r}
+#Clearing previous data
+rm(list=ls())
+
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(tigris)
+library(lubridate)
+library(janitor)
+library(knitr)
+library(ggplot2)
+
+options(tigris_use_cache = TRUE)
+
+```
+
+#### Step 2: Load & Inspect Bus Ridership
+
+```{r}
+
+bus_rider_2022 <- st_read("Data/Fall_2022_Stop_Summary_(Bus).csv") %>%
+  clean_names() %>%
+  select(-source,-gis_db_id) 
+
+colnames(bus_rider_2022) <- c ("x", "y", "fid", "mode", "route", "direction", "route_1", "stop",
+  "lat", "lon", "season", "week_on", "week_off", "sat_on", "sat_off",
+  "sun_on", "sun_off")
+
+bus_rider_2023 <- st_read("Data/Fall_2023_Stop_Summary_(Bus).csv") %>%
+  clean_names() %>%
+  select(-gisdbid)
+
+colnames(bus_rider_2023) <- c ("x", "y", "fid", "mode", "route", "direction", "route_1", "stop",
+  "lat", "lon", "season", "week_on", "week_off", "sat_on", "sat_off",
+  "sun_on", "sun_off")
+
+bus_rider_2024 <- st_read("Data/Fall_2024_Stop_Summary_(Bus).csv") %>%
+  clean_names()
+
+colnames(bus_rider_2024) <- c ("x", "y", "fid", "mode", "route", "direction", "route_1", "stop",
+  "lat", "lon", "season", "week_on", "week_off", "sat_on", "sat_off",
+  "sun_on", "sun_off")
+
+bus_rider_2025 <- st_read("Data/Fall_2025_Stop_Summary_(Bus).csv") %>%
+  clean_names()
+
+colnames(bus_rider_2025) <- c ("x", "y", "fid", "mode", "route", "direction", "route_1", "stop",
+  "lat", "lon", "season", "week_on", "week_off", "sat_on", "sat_off",
+  "sun_on", "sun_off")
+
+bus_rider <- bind_rows(bus_rider_2022, bus_rider_2023, bus_rider_2024, bus_rider_2025)
+
+```
+
+#### Step 3: Filtering Bus Ridership Data
+
+```{r}
+# Load Philadelphia boundary
+PhillyBoundary <- 
+  st_read("Data/Census_Tracts_2010-shp/57b9fc6a-ab88-44db-8773-2a46a97483252020328-1-1vm5ejc.1re.shp") %>%
+  st_set_crs(2272)
+
+library(sf)
+library(dplyr)
+library(janitor)
+
+bus_rider <- bus_rider %>%
+  mutate(
+    x = as.numeric(x),
+    y = as.numeric(y)
+  ) %>%
+  filter(!is.na(x), !is.na(y))
+
+#Aggregating Data to each bus stop 
+bus_rider_stops <- bus_rider %>%
+  group_by(route_1)
+
+# Convert to spatial (sf object)
+bus_rider_sf <- bus_rider %>%
+  st_as_sf(coords = c("x", "y"), crs = 4326) %>%
+  st_transform(2272)
+
+# Write to GeoJSON
+st_write(
+  st_transform(bus_rider_sf, 4326),
+  "bus_rider.geojson",
+  driver = "GeoJSON",
+  delete_dsn = TRUE
+)
+
+# Map
+p1 <- ggplot() + 
+  geom_sf(data = PhillyBoundary, fill = "gray95", color = "gray60") +
+  geom_sf(data = bus_rider_sf, color = "#d62828", size = 0.1, alpha = 0.4) +
+  labs(
+    title = "Bus Stop Locations",
+    subtitle = paste0("Bus Stops in Philly, n = ", nrow(bus_rider))
+  )
+
+p1
+```
