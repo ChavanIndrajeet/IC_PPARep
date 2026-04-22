@@ -1,5 +1,5 @@
 ---
-title: "Bikeshare_SpaceTime_Prediction"
+title: "Lab 5: Bikeshare SpaceTime Prediction"
 subtitle: "CPLN 5080 - Spring 2026"
 author: "Indrajeet Chavan and Wil Rantala"
 date: "April 14, 2026"
@@ -738,6 +738,10 @@ model1 <- lm(
 )
 
 summary(model1)
+
+# Summary too long with all station dummies, just show key metrics
+cat("Model 1 R-squared:", summary(model1)$r.squared, "\n")
+cat("Model 1 Adj R-squared:", summary(model1)$adj.r.squared, "\n")
 ```
 
 The model uses Monday as the baseline. Each coefficient represents the difference in expected trips per station-hour compared to Monday - dow_simple2 = Tuesday..
@@ -769,6 +773,10 @@ model2 <- lm(
 )
 
 summary(model2)
+
+# Summary too long with all station dummies, just show key metrics
+cat("Model 2 R-squared:", summary(model2)$r.squared, "\n")
+cat("Model 2 Adj R-squared:", summary(model2)$adj.r.squared, "\n")
 ```
 
 **Question:** Did adding lags improve R²? Why or why not?
@@ -784,6 +792,10 @@ model3 <- lm(
 )
 
 summary(model3)
+
+# Summary too long with all station dummies, just show key metrics
+cat("Model 3 R-squared:", summary(model3)$r.squared, "\n")
+cat("Model 3 Adj R-squared:", summary(model3)$adj.r.squared, "\n")
 ```
 
 ## Model 4: Add Station Fixed Effects
@@ -1848,6 +1860,9 @@ model1Q2 <- lm(
 )
 
 summary(model1Q2)
+
+cat("Model 1 R-squared:", summary(model1Q2)$r.squared, "\n")
+cat("Model 1 Adj R-squared:", summary(model1Q2)$adj.r.squared, "\n")
 ```
 
 The model uses Monday as the baseline. Each coefficient represents the difference in expected trips per station-hour compared to Monday - dow_simple2 = Tuesday..
@@ -1885,6 +1900,9 @@ model2Q2 <- lm(
 )
 
 summary(model2Q2)
+
+cat("Model 2 R-squared:", summary(model2Q2)$r.squared, "\n")
+cat("Model 2 Adj R-squared:", summary(model2Q2)$adj.r.squared, "\n")
 ```
 
 Question: Did adding lags improve R²? Why or why not?
@@ -1904,6 +1922,9 @@ model3Q2 <- lm(
 )
 
 summary(model3Q2)
+
+cat("Model 3 R-squared:", summary(model3Q2)$r.squared, "\n")
+cat("Model 3 Adj R-squared:", summary(model3Q2)$adj.r.squared, "\n")
 ```
 
 Adding demographic data only increased the R^2 from 0.305 to 0.311
@@ -2384,31 +2405,33 @@ Plus a Poisson model for comparison
 library(dplyr)
 library(lubridate)
 
-df <- df %>%
+names(trainQ2)
+
+trainQ2_updated <- trainQ2 %>%
   mutate(
-    # Temporal features
-    date = as.Date(datetime),
+    # Ensure date is Date type
+    date = as.Date(date),
     month = month(date),
     day = day(date),
     weekday = wday(date, label = TRUE),
-    is_weekend = ifelse(weekday %in% c("Sat", "Sun"), 1, 0),
 
-    # Holiday indicator (basic US holidays)
+    # Temporal feature: Holiday indicator
     is_holiday = ifelse(
       (month == 7 & day == 4) |                     # July 4th
-      (month == 9 & weekday == "Mon" & day <= 7) |  # Labor Day (approx)
-      (month == 5 & weekday == "Mon" & day >= 25),  # Memorial Day (approx)
+      (month == 9 & weekday == "Mon" & day <= 7) |  # Labor Day
+      (month == 5 & weekday == "Mon" & day >= 25),  # Memorial Day
       1, 0
     ),
 
-    # Weather feature: "perfect biking weather"
+    # Temporal interaction: weekend × rush hour
+    weekend_rush = weekend * rush_hour,
+
+    # Weather feature: Perfect biking weather
     perfect_bike_weather = ifelse(
-      temp >= 60 & temp <= 75 & precipitation == 0,
+      Temperature >= 60 & Temperature <= 75 &
+      Precipitation == 0 & Wind_Speed < 10,
       1, 0
-    ),
-
-    # Interaction: weekend + good weather
-    weekend_nice = is_weekend * perfect_bike_weather
+    )
   )
 ```
 
@@ -2417,13 +2440,19 @@ df <- df %>%
 Replace demand and predictors with your actual variable names
 
 ```{r}
+# Improved Model
 model_improved <- lm(
-  demand ~ temp + precipitation + is_weekend +
-    is_holiday + perfect_bike_weather + weekend_nice,
-  data = df
+  Trip_Count ~ Temperature + Precipitation + weekend +
+    is_holiday + weekend_rush + perfect_bike_weather +
+    lag1Hour,   # lag helps a LOT
+  data = trainQ2_updated
 )
 
 summary(model_improved)
+
+# Summary
+cat("Improved Model R-squared:", summary(model_improved)$r.squared, "\n")
+cat("Improved Model Adj R-squared:", summary(model_improved)$adj.r.squared, "\n")
 
 ```
 
@@ -2434,18 +2463,19 @@ I added holiday indicators because error analysis showed the model struggled dur
 Replace demand and predictors with your actual variable names
 
 ```{r}
+
 library(Metrics)
 
 # Predictions
-pred_old <- predict(model_old, df)
-pred_new <- predict(model_improved, df)
+pred_new <- predict(model_improved, trainQ2_updated)
+pred_old <- predict(model5Q2, trainQ2)
 
 # MAE comparison
-mae_old <- mae(df$demand, pred_old)
-mae_new <- mae(df$demand, pred_new)
+mae_new <- mae(trainQ2_updated$Trip_Count, pred_new)
+mae_old <- mae(trainQ2$Trip_Count, pred_old)
 
-mae_old
 mae_new
+mae_old
 
 ```
 
@@ -2455,20 +2485,23 @@ This model is better for Count Data
 
 ```{r}
 
+# Poisson Model
 model_poisson <- glm(
-  demand ~ temp + precipitation + is_weekend +
-    is_holiday + perfect_bike_weather + weekend_nice,
-  data = df,
+  Trip_Count ~ Temperature + Precipitation + weekend +
+    is_holiday + weekend_rush + perfect_bike_weather +
+    lag1Hour,
+  data = trainQ2_updated,
   family = "poisson"
 )
 
 summary(model_poisson)
 
-# Predictions (Poisson gives log scale → convert)
+# Predictions
 pred_poisson <- predict(model_poisson, type = "response")
 
-mae_poisson <- mae(df$demand, pred_poisson)
+mae_poisson <- mae(trainQ2_updated$Trip_Count, pred_poisson)
 
+mae_poisson
 mae_poisson
 
 ```
@@ -2482,23 +2515,30 @@ Write 1-2 paragraphs addressing:
     -   When do prediction errors cause problems for rebalancing?
     -   Would you recommend deploying this system? Under what conditions?
     
-The final model shows meaningful improvement, but whether the MAE is “good enough” depends on operational tolerance. If errors are small relative to station capacity and typical demand fluctuations, it can support planning, but not fully automate rebalancing. Prediction errors are most problematic during peak or atypical periods (e.g., weekends with good weather or holidays), when underestimation can lead to empty stations and overestimation can cause inefficient redistribution. I would recommend deploying this system as a decision-support tool, not a standalone system—paired with real-time monitoring and human oversight, especially during high-variability periods.
+The Poisson model shows a clear improvement in fit, with a substantial reduction in deviance and an MAE of ~0.75 trips. Whether this is “good enough” depends on station-level demand. But for low-demand stations, this level of error may be acceptable, but for high-demand stations or peak hours, even small absolute errors can translate into meaningful operational issues. The strong and highly significant coefficient on lag1Hour (z = 372) suggests that short-term demand persistence is the dominant driver, which is useful for near-term forecasting but may limit performance during sudden shifts.
+
+Prediction errors are most problematic during peak demand periods and atypical conditions. For example, underestimating demand during rush hours can lead to empty stations, while overestimation during low-demand periods can result in inefficient truck dispatching. Given these dynamics, this model is suitable as a decision-support tool rather than a fully automated system. It would be most effective when paired with real-time monitoring and used for short-term forecasting like the next hour, particularly in stable demand conditions.
 
 2.  **Equity considerations:**
     -   Do prediction errors disproportionately affect certain neighborhoods?
     -   Could this system worsen existing disparities in bike access?
     -   What safeguards would you recommend?
     
-From an equity perspective, errors often remain higher in lower-demand or historically under served neighborhoods, which risks reinforcing disparities if rebalancing decisions rely heavily on these predictions. This could unintentionally prioritize already well-served, high-demand areas. Safeguards should include monitoring error by neighborhood, setting minimum service thresholds across all areas, and incorporating equity-weighted objectives into rebalancing decisions. 
+Prediction errors are unlikely to be evenly distributed across space. Since the model relies heavily on historical demand by using the variable lag1Hour and general temporal/weather patterns, it will tend to perform better in high-usage, well-established stations and worse in low-demand or historically underserved neighborhoods. This creates a risk where rebalancing decisions reinforce existing usage patterns—allocating more bikes to already busy areas while neglecting communities with lower baseline demand.
+
+To prevent this, safeguards should include monitoring model error geographically, setting minimum service thresholds across all neighborhoods, and incorporating equity-weighted objectives into optimization decisions. For example, ensuring a baseline number of bikes in underserved areas regardless of predicted demand can help avoid reinforcing disparities.
 
 3.  **Model limitations:**
     -   What patterns is your model missing?
     -   What assumptions might not hold in real deployment?
     -   How would you improve this with more time/data?
     
-The model is also limited in capturing sudden demand shocks, behavioral shifts, and finer spatial dynamics like events and micro-level infrastructure differences. Its assumptions of stable relationships between weather, time, and demand may not hold in real-world deployment. 
+While the model captures key temporal and weather effects, it misses several important patterns. It assumes relatively stable relationships between predictors and demand, which may not hold during special events, system disruptions, or behavioral shifts. The negative coefficient on perfect_bike_weather is a sign that some nonlinear or interaction effects are not being fully captured, suggesting model misspecification.
 
-With more time and data, improvements could include incorporating real-time feeds, richer spatial features like bike lane connectivity and more flexible models similar to tree-based or spatiotemporal models, to better capture nonlinear and localized patterns.
+Additionally, the model lacks fine-grained spatial features like proximity to transit, land use and bike infrastructure and does not account for real-time system dynamics such as bike availability or station capacity constraints. With more time and data, performance could be improved by incorporating:
+- richer spatial variables (e.g., distance to Center City, bike lanes),
+- event and calendar data,
+- and more flexible models (e.g., gradient boosting or spatiotemporal models) that better capture non-linearities and localized variation.
 
 ------------------------------------------------------------------------
 
