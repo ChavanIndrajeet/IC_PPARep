@@ -1,0 +1,485 @@
+---
+title: "Transit Prediction Model- Technical Appendix"
+subtitle: "MUSA 5080 - Public Policy Analytics"
+author: "Indrajeet Chavan, Wil Rantala, Alajandro Duque, Umair Saad"
+date: "March 16, 2026"
+format: 
+  html:
+    code-fold: false
+    toc: true
+    toc-location: left
+    theme: cosmo
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+#Overview
+
+**The Challenge:**
+Build a predictive model that city officials would actually want to use, using only the techniques we’ve covered this semester.
+
+**The Stakes:**
+Your presentation will be evaluated by a panel of judges (your professor + a surprise guest) who will grill you on your methods, assumptions, and recommendations. You need to demonstrate not just technical competence, but deep understanding of what you’ve built and why it matters.
+
+## Phase 1: Data Cleaning
+
+#### Step 1: Load Libraries
+
+```{r}
+#Clearing previous data
+rm(list=ls())
+
+install.packages("lehdr")
+
+library(lehdr)
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(tigris)
+library(lubridate)
+library(janitor)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(janitor)
+library(dplyr)
+library(sf)
+
+options(tigris_use_cache = TRUE)
+```
+
+#### Step 2: Load & Inspect Bus Ridership
+
+```{r}
+
+#Load ridership data
+bus_rider_2022 <- st_read("Data/Fall_2022_Stop_Summary_(Bus).csv") %>%
+  clean_names() %>%
+  select(-source,-gis_db_id) 
+
+bus_rider_2023 <- st_read("Data/Fall_2023_Stop_Summary_(Bus).csv") %>%
+  clean_names() %>%
+  select(-gisdbid)
+
+bus_rider_2024 <- st_read("Data/Fall_2024_Stop_Summary_(Bus).csv") %>%
+  clean_names()
+
+bus_rider_2025 <- st_read("Data/Fall_2025_Stop_Summary_(Bus).csv") %>%
+  clean_names()
+
+# Standardize column names
+colnames(bus_rider_2022) <- colnames(bus_rider_2023) <- 
+colnames(bus_rider_2024) <- colnames(bus_rider_2025) <- 
+c("x","y","fid","mode","route","direction","route_1","stop",
+  "lat","lon","season","week_on","week_off",
+  "sat_on","sat_off","sun_on","sun_off")
+
+# Combine
+bus_rider <- bind_rows(
+  bus_rider_2022,
+  bus_rider_2023,
+  bus_rider_2024,
+  bus_rider_2025
+)
+
+```
+
+#### Step 3: Clean + Create Target Variable
+
+```{r}
+
+bus_rider <- bus_rider %>%
+  mutate(
+    week_on = as.numeric(week_on),
+    sat_on  = as.numeric(sat_on),
+    sun_on  = as.numeric(sun_on),
+    total_riders = week_on + sat_on + sun_on
+  ) %>%
+  filter(!is.na(x), !is.na(y), total_riders > 0)
+
+# Convert to sf
+bus_rider_sf <- bus_rider %>%
+  mutate(
+    lat = as.numeric(lat),
+    lon  = as.numeric(lon)
+    ) %>%
+  st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+  st_transform(2272)
+
+ggplot(bus_rider_sf) +
+  geom_sf(color = "blue", size = 1) +
+  theme_minimal() +
+  labs(title = "Bus Stops")
+
+```
+
+#### Step 4: Create 1000 × 1000 ft Grid (your fishnet)
+
+```{r}
+
+# Philly boundary
+philadelphia <- get_acs(
+  geography = "county",
+  variables = "B01003_001",
+  state = "PA",
+  county = "Philadelphia",
+  geometry = TRUE,
+  year = 2023
+) %>%
+  st_transform(2272)
+
+# 1000 ft grid
+philly_grid <- st_make_grid(philadelphia, cellsize = 1000, square = TRUE) %>%
+  st_sf() %>%
+  mutate(cell_id = row_number())
+
+# Clip to city
+philly_grid <- philly_grid[philadelphia, ]
+
+# 3. Pull census tracts with raw counts
+acs_vars <- c(
+  total_pop     = "B01003_001",
+  total_hh      = "B08201_001",
+  no_vehicle_hh = "B08201_002",
+  median_income = "B19013_001",
+  poverty_denom = "B17001_001",
+  poverty_count = "B17001_002",
+  white         = "B03002_003",
+  black         = "B03002_004",
+  hispanic      = "B03002_012",
+  asian         = "B03002_006"
+)
+
+tracts <- get_acs(
+  geography = "tract",
+  variables = acs_vars,
+  state = "PA",
+  county = "Philadelphia",
+  geometry = TRUE,
+  year = 2024,
+  output = "wide"
+) %>%
+  st_transform(2272)
+
+# 4. Interpolate counts onto grid
+# 4. Interpolate — keep geometry so we can join spatially
+grid_counts <- st_interpolate_aw(
+  tracts %>% select(total_popE, poverty_countE, poverty_denomE,
+                    no_vehicle_hhE, total_hhE,
+                    whiteE, blackE, hispanicE, asianE, geometry),
+  philly_grid,
+  extensive = TRUE
+)
+
+grid_income <- st_interpolate_aw(
+  tracts %>% select(median_incomeE, geometry),
+  philly_grid,
+  extensive = FALSE
+) %>%
+  rename(median_income = median_incomeE)
+
+# 5. Spatial join back to grid (avoids row_number() misalignment)
+philly_grid_census <- philly_grid %>%
+  st_join(grid_counts %>% select(-geometry), join = st_equals) %>%
+  st_join(grid_income  %>% select(median_income, geometry), join = st_equals) %>%
+  mutate(
+    cell_area_km2  = (1000 * 0.3048)^2 / 1e6,  # This is to convert it to km^2 from feet
+    pop_density    = total_popE / cell_area_km2,
+    pct_no_vehicle = no_vehicle_hhE / total_hhE,
+    pct_poverty    = poverty_countE / poverty_denomE,
+    pct_white      = whiteE / total_popE,
+    pct_black      = blackE / total_popE,
+    pct_hispanic   = hispanicE / total_popE,
+    pct_asian      = asianE / total_popE,
+  )
+# Filter out any cells that have 0 population
+philly_grid_census <- philly_grid_census %>%
+  filter(!is.na(total_popE), total_popE > 0)
+
+# We get some NAs for median_income, let's get neighboring cells' incomes and average them for those. On one pass of this function, there were still some NAs because the cells were using adjacent cells' NAs to try to fill in median income. For that reason, we're doing a for loop to repeat the function until there aren't any NAs.
+
+fill_na_from_neighbors_iter <- function(grid, col, max_iter = 10) {
+  vals <- grid[[col]]
+  nb <- st_touches(grid)
+  
+  for (i in seq_len(max_iter)) {
+    if (!any(is.na(vals))) break  # stop early if no NAs remain
+    
+    vals <- sapply(seq_along(vals), function(i) {
+      if (!is.na(vals[i])) return(vals[i])
+      neighbor_vals <- vals[nb[[i]]]
+      neighbor_vals <- neighbor_vals[!is.na(neighbor_vals)]
+      if (length(neighbor_vals) == 0) return(NA)
+      mean(neighbor_vals)
+    })
+  }
+  vals
+}
+
+philly_grid_census <- philly_grid_census %>%
+  mutate(median_income = fill_na_from_neighbors_iter(., "median_income"))
+
+# This still spits out a few NAs. Most likely, it's beacause some of the NA cells had NAs neighboring them.
+```
+
+#### Step 5: Visualizing the census grid
+
+```{r}
+#Visualizing the census grid
+ggplot(philly_grid_census) +
+  aes(fill = pop_density) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", name = "Pop/km²") +
+  labs(title = "Population Density by Grid Cell") +
+  theme_void()
+```
+
+#### Step 6: Assign Bus Stops to Grid Cells
+
+```{r}
+
+# Spatial join: assign each bus stop to a grid cell
+bus_rider_sf <- bus_rider_sf %>%
+  select(-x, -y) 
+
+bus_with_grid <- st_join(bus_rider_sf, philly_grid, join = st_intersects)
+
+# Clip to city
+bus_with_grid <- bus_with_grid[philadelphia, ]
+  
+# head(philly_grid)
+# 
+# sum(lengths(st_within(bus_rider_sf, philly_grid)) > 0)
+# 
+# plot.new()
+# plot(st_geometry(philly_grid), border = "grey")
+# plot(st_geometry(bus_rider_sf), add = TRUE, col = "red", pch = 16)
+# 
+# sum(st_is_empty(bus_rider_sf))
+# 
+# library(ggplot2)
+# 
+
+ggplot() +
+  geom_sf(data = philly_grid, fill = NA, color = "grey") +
+  geom_sf(data = bus_rider_sf, color = "red", size = 1) +
+  theme_minimal()
+
+ggplot() +
+  geom_sf(data = bus_with_grid, color = "red", size = 1) +
+  theme_minimal()
+
+# sum(is.na(st_coordinates(bus_rider_sf)))
+```
+
+#### Step 7: Aggregate to Grid Level
+
+```{r}
+
+bus_with_grid <- bus_with_grid %>%
+  mutate(
+    coords = st_coordinates(geometry),
+    stop_id = paste0(round(coords[,1], 2), "_", round(coords[,2], 2))
+  )
+
+bus_grid_summary <- bus_with_grid %>%
+  st_drop_geometry() %>%
+  group_by(cell_id) %>%
+  summarise(
+    total_riders = sum(total_riders, na.rm = TRUE),
+
+    # unique stops (based on coordinates)
+    unique_stops = n_distinct(stop_id),
+
+    # unique routes in that grid cell
+    unique_routes = n_distinct(route)
+  )
+
+```
+
+#### Step 6: Join Back to Grid
+
+```{r}
+
+philly_grid_final <- philly_grid_census %>%
+  left_join(bus_grid_summary, by = "cell_id") %>%
+  mutate(
+    total_riders = replace_na(total_riders, 0),
+    unique_stops   = replace_na(unique_stops, 0),
+    unique_routes   = replace_na(unique_routes, 0)
+  )
+
+```
+
+#### Step 7: Loading Spatial Data: Roads
+
+```{r}
+#Loading the shape file 
+roads <- st_read("Data/PaLocalRoads2024_03/PaLocalRoads2024_03.shp")
+
+#Setting the CRS
+roads <- st_transform(roads, st_crs(philly_grid))
+
+```
+
+#### Step 8: Create a binary road indicator
+
+```{r}
+#Loading the shape file 
+road_indicator <- philly_grid %>%
+  mutate(has_road = as.integer(lengths(st_intersects(., roads)) > 0)) %>%
+  st_drop_geometry() %>%
+  select(cell_id, has_road)
+
+table(road_indicator$has_road, useNA = "ifany")
+
+```
+
+#### Step 9: Join categorical variable for roads to your final dataset
+
+```{r}
+
+philly_grid_final <- philly_grid_final %>%
+  left_join(road_indicator, by = "cell_id") %>%
+  mutate(has_road = replace_na(has_road, 0))
+
+#Checking if it worked
+table(philly_grid_final$has_road, useNA = "ifany")
+
+#Making a dataset for road length in each grid cell
+road_length <- st_intersection(philly_grid, roads) %>%
+  mutate(length = st_length(geometry)) %>%
+  st_drop_geometry() %>%
+  group_by(cell_id) %>%
+  summarise(road_length = sum(length))
+
+```
+
+#### Step 10: Mapping which grid cells have roads
+
+```{r}
+#Creating a map for mapping cells with roads
+# ggplot(philly_grid_final) +
+#   geom_sf(aes(fill = factor(has_road)), color = "grey70", size = 0.1) +
+#   scale_fill_manual(
+#     values = c("0" = "maroon", "1" = "darkblue"),
+#     labels = c("0" = "No Road", "1" = "Road Present"),
+#     name = "Road Presence"
+#   ) +
+#   theme_minimal() +
+#   labs(title = "Grid Cells with Road Presence")
+
+ggplot(philly_grid_final) +
+  geom_sf(aes(fill = factor(has_road)), color = NA) +
+  scale_fill_manual(values = c("0" = "darkgrey", "1" = "darkblue")) +
+  theme_void() +
+  labs(title = "Road Presence by Grid Cell")
+
+```
+
+#### Step 11: Load Data for Jobs
+
+```{r}
+# #Loading the shape file 
+# jobs <- st_read("Data/otm_44d5b32c1de048ccb04fcbfc95b0a180/polygon_2023.shp")
+# 
+# #Setting the CRS
+# jobs <- st_transform(jobs, st_crs(philly_grid))
+
+# Download PA Workplace Area Characteristics (jobs by location)
+pa_wac <- grab_lodes(
+  state = "pa",
+  year = 2021,
+  lodes_type = "wac",
+  job_type = "JT00",
+  segment = "S000",
+  state_part = "main",
+  agg_geo = "block"   # ← IMPORTANT
+)
+
+philly_jobs <- pa_wac %>%
+  filter(substr(w_geocode, 1, 5) == "42101")
+
+
+blocks <- get_decennial(
+  geography = "block",
+  variables = "P1_001N",
+  state = "PA",
+  county = "Philadelphia",
+  year = 2020,
+  geometry = TRUE
+) %>%
+  st_transform(2272)
+
+```
+
+#### Step 12: Join Jobs to Blocks
+
+```{r}
+#Join jobs to blocks
+philly_jobs_sf <- blocks %>%
+  left_join(
+    philly_jobs,
+    by = c("GEOID" = "w_geocode")
+  )
+
+#Cleaning the data to keep what we need
+philly_jobs_sf <- philly_jobs_sf %>%
+  select(GEOID, C000, geometry) %>%
+  rename(total_jobs = C000) %>%
+  mutate(total_jobs = replace_na(total_jobs, 0))
+```
+
+#### Step 13: Aggregate Data to the grid
+
+```{r}
+# spatial join blocks to the grid
+jobs_with_grid <- st_join(philly_jobs_sf, philly_grid, join = st_within)
+
+# aggregate
+jobs_grid <- jobs_with_grid %>%
+  st_drop_geometry() %>%
+  group_by(cell_id) %>%
+  summarise(
+    total_jobs = sum(total_jobs, na.rm = TRUE)
+  )
+
+#Adding to the final grid
+philly_grid_final <- philly_grid_final %>%
+  left_join(jobs_grid, by = "cell_id") %>%
+  mutate(total_jobs = replace_na(total_jobs, 0))
+```
+
+#### Step 13: Load Data for Jobs
+
+```{r}
+
+philly_grid_final <- philly_grid_final %>%
+  mutate(
+    jobs_density = total_jobs / ((1000 * 0.3048)^2),
+    jobs_to_pop_ratio = total_jobs / (total_popE + 1)
+  )
+
+```
+
+#### Step 14: Mapping the Job density
+
+```{r}
+#Creating a visualization for total jobs
+
+ggplot(philly_grid_final) +
+  geom_sf(aes(fill = total_jobs), color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    trans = "sqrt",
+    limits = c(0, 1500),
+    oob = scales::squish
+  ) +
+  theme_void() +
+  labs(
+    title = "Job Density by Grid Cell",
+    fill = "Total Jobs"
+  )
+```
