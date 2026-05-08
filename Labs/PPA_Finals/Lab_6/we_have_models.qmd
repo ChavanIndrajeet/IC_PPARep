@@ -1,0 +1,1110 @@
+---
+title: "Transit Prediction Model- Technical Appendix"
+subtitle: "MUSA 5080 - Public Policy Analytics"
+author: "Indrajeet Chavan, Wil Rantala, Alajandro Duque, Umair Saad"
+date: "April 27, 2026"
+format: 
+  html:
+    code-fold: false
+    toc: true
+    toc-location: left
+    theme: cosmo
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+#Overview
+
+**The Challenge:**
+Build a predictive model that city officials would actually want to use, using only the techniques we’ve covered this semester.
+
+**The Stakes:**
+Your presentation will be evaluated by a panel of judges (your professor + a surprise guest) who will grill you on your methods, assumptions, and recommendations. You need to demonstrate not just technical competence, but deep understanding of what you’ve built and why it matters.
+
+## Phase 1: Data Cleaning
+
+#### Step 1: Load Libraries
+
+```{r}
+#Clearing previous data
+rm(list=ls())
+
+#Loading the libraries
+library(tidyverse)
+library(sf)
+library(tidycensus)
+library(tigris)
+library(lubridate)
+library(janitor)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+library(janitor)
+library(patchwork)
+library(lehdr)
+library(spdep)
+library(caret)
+
+options(tigris_use_cache = TRUE)
+```
+
+#### Step 2: Load & Inspect Bus Ridership
+
+```{r}
+
+#Load ridership data
+bus_rider_2022 <- st_read("Data/Fall_2022_Stop_Summary_(Bus).csv") %>%
+  clean_names() %>%
+  select(-source,-gis_db_id) 
+
+bus_rider_2023 <- st_read("Data/Fall_2023_Stop_Summary_(Bus).csv") %>%
+  clean_names() %>%
+  select(-gisdbid)
+
+bus_rider_2024 <- st_read("Data/Fall_2024_Stop_Summary_(Bus).csv") %>%
+  clean_names()
+
+bus_rider_2025 <- st_read("Data/Fall_2025_Stop_Summary_(Bus).csv") %>%
+  clean_names()
+
+# Standardize column names
+colnames(bus_rider_2022) <- colnames(bus_rider_2023) <- 
+colnames(bus_rider_2024) <- colnames(bus_rider_2025) <- 
+c("x","y","fid","mode","route","direction","route_1","stop",
+  "lat","lon","season","week_on","week_off",
+  "sat_on","sat_off","sun_on","sun_off")
+
+# Combine
+bus_rider <- bind_rows(
+  bus_rider_2022,
+  bus_rider_2023,
+  bus_rider_2024,
+  bus_rider_2025
+)
+
+```
+
+#### Step 3: Clean + Create Target Variable
+
+```{r}
+
+bus_rider <- bus_rider %>%
+  mutate(
+    week_on = as.numeric(week_on),
+    sat_on  = as.numeric(sat_on),
+    sun_on  = as.numeric(sun_on),
+    total_riders = week_on + sat_on + sun_on
+  ) %>%
+  filter(!is.na(x), !is.na(y), total_riders > 0)
+
+# Convert to sf
+bus_rider_sf <- bus_rider %>%
+  mutate(
+    lat = as.numeric(lat),
+    lon  = as.numeric(lon)
+    ) %>%
+  st_as_sf(coords = c("lon","lat"), crs = 4326) %>%
+  st_transform(2272)
+
+ggplot(bus_rider_sf) +
+  geom_sf(color = "blue", size = 1) +
+  theme_minimal() +
+  labs(title = "Bus Stops")
+
+```
+
+#### Step 4: Create 1000 × 1000 ft Grid (your fishnet)
+
+```{r}
+
+# Philly boundary
+philadelphia <- get_acs(
+  geography = "county",
+  variables = "B01003_001",
+  state = "PA",
+  county = "Philadelphia",
+  geometry = TRUE,
+  year = 2023
+) %>%
+  st_transform(2272)
+
+# 1000 ft grid
+philly_grid <- st_make_grid(philadelphia, cellsize = 1000, square = TRUE) %>%
+  st_sf() %>%
+  mutate(cell_id = row_number())
+
+# Clip to city
+philly_grid <- philly_grid[philadelphia, ]
+
+# 3. Pull census tracts with raw counts
+acs_vars <- c(
+  total_pop     = "B01003_001",
+  total_hh      = "B08201_001",
+  no_vehicle_hh = "B08201_002",
+  median_income = "B19013_001",
+  poverty_denom = "B17001_001",
+  poverty_count = "B17001_002",
+  white         = "B03002_003",
+  black         = "B03002_004",
+  hispanic      = "B03002_012",
+  asian         = "B03002_006"
+)
+
+tracts <- get_acs(
+  geography = "tract",
+  variables = acs_vars,
+  state = "PA",
+  county = "Philadelphia",
+  geometry = TRUE,
+  year = 2024,
+  output = "wide"
+) %>%
+  st_transform(2272)
+
+# 4. Interpolate counts onto grid
+# 4. Interpolate — keep geometry so we can join spatially
+grid_counts <- st_interpolate_aw(
+  tracts %>% select(total_popE, poverty_countE, poverty_denomE,
+                    no_vehicle_hhE, total_hhE,
+                    whiteE, blackE, hispanicE, asianE, geometry),
+  philly_grid,
+  extensive = TRUE
+)
+
+grid_income <- st_interpolate_aw(
+  tracts %>% select(median_incomeE, geometry),
+  philly_grid,
+  extensive = FALSE
+) %>%
+  rename(median_income = median_incomeE)
+
+# 5. Spatial join back to grid (avoids row_number() misalignment)
+philly_grid_census <- philly_grid %>%
+  st_join(grid_counts %>% select(-geometry), join = st_equals) %>%
+  st_join(grid_income  %>% select(median_income, geometry), join = st_equals) %>%
+  mutate(
+    cell_area_km2  = (1000 * 0.3048)^2 / 1e6,  # This is to convert it to km^2 from feet
+    pop_density    = total_popE / cell_area_km2,
+    pct_no_vehicle = no_vehicle_hhE / total_hhE,
+    pct_poverty    = poverty_countE / poverty_denomE,
+    pct_white      = whiteE / total_popE,
+    pct_black      = blackE / total_popE,
+    pct_hispanic   = hispanicE / total_popE,
+    pct_asian      = asianE / total_popE,
+  )
+# Filter out any cells that have 0 population
+philly_grid_census <- philly_grid_census %>%
+  filter(!is.na(total_popE), total_popE > 0)
+
+# We get some NAs for median_income, let's get neighboring cells' incomes and average them for those. On one pass of this function, there were still some NAs because the cells were using adjacent cells' NAs to try to fill in median income. For that reason, we're doing a for loop to repeat the function until there aren't any NAs.
+
+fill_na_from_neighbors_iter <- function(grid, col, max_iter = 10) {
+  vals <- grid[[col]]
+  nb <- st_touches(grid)
+  
+  for (i in seq_len(max_iter)) {
+    if (!any(is.na(vals))) break  # stop early if no NAs remain
+    
+    vals <- sapply(seq_along(vals), function(i) {
+      if (!is.na(vals[i])) return(vals[i])
+      neighbor_vals <- vals[nb[[i]]]
+      neighbor_vals <- neighbor_vals[!is.na(neighbor_vals)]
+      if (length(neighbor_vals) == 0) return(NA)
+      mean(neighbor_vals)
+    })
+  }
+  vals
+}
+
+philly_grid_census <- philly_grid_census %>%
+  mutate(median_income = fill_na_from_neighbors_iter(., "median_income"))
+
+# This still spits out a few NAs. Most likely, it's beacause some of the NA cells had NAs neighboring them.
+```
+
+#Visualizing the census grid
+
+```{r}
+#Visualizing the census grid
+d1 <- ggplot(philly_grid_census) +
+  aes(fill = pop_density) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", name = "Pop/km²") +
+  labs(title = "Population Density by Grid Cell") +
+  theme_void()
+
+d1
+```
+
+#### Step 5: Assign Bus Stops to Grid Cells
+
+```{r}
+
+# Spatial join: assign each bus stop to a grid cell
+bus_rider_sf <- bus_rider_sf %>%
+  select(-x, -y) 
+
+bus_with_grid <- st_join(bus_rider_sf, philly_grid, join = st_intersects)
+
+# Clip to city
+bus_with_grid <- bus_with_grid[philadelphia, ]
+  
+# head(philly_grid)
+# 
+# sum(lengths(st_within(bus_rider_sf, philly_grid)) > 0)
+# 
+# plot.new()
+# plot(st_geometry(philly_grid), border = "grey")
+# plot(st_geometry(bus_rider_sf), add = TRUE, col = "red", pch = 16)
+# 
+# sum(st_is_empty(bus_rider_sf))
+# 
+# library(ggplot2)
+# 
+ggplot() +
+  geom_sf(data = philly_grid, fill = NA, color = "grey") +
+  geom_sf(data = bus_with_grid, color = "red", size = 1) +
+  theme_minimal()
+#
+# sum(is.na(st_coordinates(bus_rider_sf)))
+```
+
+#### Step 5: Aggregate to Grid Level
+
+```{r}
+
+bus_with_grid <- bus_with_grid %>%
+  mutate(
+    coords = st_coordinates(geometry),
+    stop_id = paste0(round(coords[,1], 2), "_", round(coords[,2], 2))
+  )
+
+ggplot() +
+  geom_sf(data = bus_with_grid)+
+  theme_minimal()
+
+bus_grid_summary <- bus_with_grid %>%
+  st_drop_geometry() %>%
+  group_by(cell_id) %>%
+  summarise(
+    total_riders = sum(total_riders, na.rm = TRUE),
+
+    # unique stops (based on coordinates)
+    unique_stops = n_distinct(stop_id),
+
+    # unique routes in that grid cell
+    unique_routes = n_distinct(route)
+  )
+
+```
+
+#### Step 6: Join Back to Grid
+
+```{r}
+
+philly_grid_final <- philly_grid_census %>%
+  left_join(bus_grid_summary, by = "cell_id") %>%
+  mutate(
+    total_riders = replace_na(total_riders, 0),
+    unique_stops   = replace_na(unique_stops, 0),
+    unique_routes   = replace_na(unique_routes, 0)
+  )
+
+# Let's visualize bus ridership, stops, and lines on the grid
+
+p1 = ggplot(philly_grid_final) +
+  aes(fill = total_riders) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", 
+                       name = "Bus Ridership", 
+                       limits = c(0, 10000),
+                       oob = scales::squish) +
+  labs(title = "Bus Ridership by Cell") +
+  theme_void()
+
+p2 = ggplot(philly_grid_final) +
+  aes(fill = unique_stops) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", 
+                       name = "Bus Stops") +
+  labs(title = "Bus Stops by Cell") +
+  theme_void()
+
+p3 = ggplot(philly_grid_final) +
+  aes(fill = unique_routes) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", 
+                       name = "Bus Routes",
+                       limits = c(0, 10),
+                       oob = scales::squish) +
+  labs(title = "Number of Bus Routes that stop in each cell") +
+  theme_void()
+
+# This prints the three maps together 
+p1 + p2 + p3 + plot_layout(ncol = 2)  # 2x2 grid (last slot empty)
+
+```
+Here we have bus ridership, stops, and routes in each cell mapped out together. The ridership and route maps are rather similar, which makes sense as ridership would peak in areas where multiple bus routes overlap or intercept.
+
+It looks like we've got some pretty major outliers on our hands. In North Philly, there are two cells with 70k+ riders. These points are major bus transfer centers where 10+ routes intersect at the same spot. For our model, we're going to remove these points as their large values may sway the results and worsen our predictive power.
+
+Let's remove cells that have total riders greater than 40 thousand, as we are not looking to predict bus ridership at/from bus transfer centers.
+
+```{r}
+philly_grid_final <- philly_grid_final %>%
+  filter(total_riders <= 40000)
+```
+
+## Getting More Spatial Data: Rail and Bus
+
+Let's get a the locations of regional rail and Philly "El" stops to create a new predictor. We'll have a predictor of distance to nearest transit.
+
+```{r}
+# Load in regional rail stations and transform/project to the correct CRS
+reg_rail <- st_read("Data/Regional_Rail_Stations.geojson") %>%
+  st_transform(2272)
+
+# Load in el stations and transform/project to the correct CRS
+el_rail <- st_read("Data/Highspeed_Stations.geojson") %>%
+  st_transform(2272)
+
+# Let's map them on our Philly Grid!
+p4 = ggplot(reg_rail) +
+  geom_sf(data = philly_grid_final, fill = NA, color = "grey") +
+  geom_sf(color = "blue", size = 1) +
+  theme_void() +
+  labs(title = "Regional Rail Stops")
+
+p5 = ggplot(el_rail) +
+  geom_sf(data = philly_grid_final, fill = NA, color = "grey") +
+  geom_sf(color = "green", size = 1) +
+  theme_void() +
+  labs(title = "El Stops")
+
+p4 + p5
+```
+The full extent of the rail systems serve outside of Philadelphia County's boundaries. Let's make sure to clip it to the city
+
+```{r}
+# clip
+el_rail <- el_rail[philadelphia, ]
+reg_rail <- reg_rail[philadelphia, ]
+```
+To see what they look like now that they've been clipped, go back to where we created p4 and p5 and just re-run the code
+
+# Variable Creation
+
+```{r}
+# Get centroids of each grid cell
+grid_centroids <- st_centroid(philly_grid_final)
+
+# Distance to nearest regional rail station (points)
+dist_reg_rail <- st_distance(grid_centroids, reg_rail)  # matrix: cells x stations
+philly_grid_final$dist_reg_rail_ft <- apply(dist_reg_rail, 1, min)
+
+# Distance to nearest El line (lines)
+dist_el <- st_distance(grid_centroids, el_rail)  # matrix: cells x line segments
+philly_grid_final$dist_el_ft <- apply(dist_el, 1, min)
+
+# Check if it looks right on a map!
+d2 <- ggplot() +
+  geom_sf(data = philly_grid_final, aes(fill = dist_el_ft), color = NA) +
+  geom_sf(data = el_rail, color = "green", size = 1) +
+  scale_fill_viridis_c(option = "magma", name = "Distance to El (ft)") +
+  theme_void() +
+  labs(title = "El Stops and Cell Distance to Nearest Station")
+
+d2
+```
+Now let's get employment data. We want to use the number of jobs within a half mile of each cell as a predictor for ridership. To do this, we'll use LEHD LODES data at the block group level.
+
+# Variable Creation: Jobs
+
+```{r}
+# API call to get the lodes data
+lodes<- grab_lodes(
+  state = "pa",
+  year = 2021,
+  lodes_type = "wac",
+  job_type = "JT00",
+  segment = "S000",
+  state_part = "main",
+  agg_geo = "bg"   #IMPORTANT
+)
+
+block_groups <- block_groups(state = "PA", county = "Philadelphia", year = 2021) %>%
+  st_transform(2272)
+
+names(lodes)
+
+jobs_sf <- block_groups %>%
+  left_join(lodes, by = c("GEOID" = "w_bg")) %>%
+  filter(!is.na(C000))
+
+
+# Let's map it to make sure it looks ok
+ggplot(jobs_sf) +
+  aes(fill = C000) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", name = "Total Jobs", 
+                       limits = c(0, 10000), 
+                       oob = scales::squish) +
+  labs(title = "Jobs by Block Group in Philadelphia") +
+  theme_void()
+```
+Ok, looks like we've got accurate job counts by acs block groups!
+
+Now, let's create a half-mile buffer and summarize the # of jobs for each cell
+```{r}
+# Create half-mile buffers around each cell centroid
+buffers <- st_buffer(grid_centroids, dist = 5280 * 0.5) %>%
+  select(cell_id, geometry)
+
+# Spatial join buffers to block groups, weighted by overlap area
+jobs_interp <- st_interpolate_aw(
+  jobs_sf %>% select(C000, geometry),
+  buffers,
+  extensive = TRUE
+) %>%
+  st_drop_geometry() %>%
+  mutate(cell_id = buffers$cell_id) %>%
+  rename(jobs_half_mile = C000)
+
+# Join back to grid
+philly_grid_final <- philly_grid_final %>%
+  left_join(jobs_interp, by = "cell_id")
+
+```
+
+Of course, let's map the results! Here's a map of jobs within a half mile of each cell
+```{r}
+p6 = ggplot(philly_grid_final) +
+  aes(fill = jobs_half_mile) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", 
+                       name = "Jobs within a half-mile", 
+                       limits = c(0, 25000), 
+                       oob = scales::squish) +
+  labs(
+    title = "Jobs within a half-mile of each 1000x1000ft cell in Philadelphia",
+    caption = "Scale capped at 25,000 to highlight secondary job centers. Many cells exceed 100,000 jobs within a half-mile.") +
+  theme_void()
+
+p6
+```
+Clearly, jobs are highly concentrated downtown and in University City. Let's compare it to the bus ridership map to see if there's a visual similarity of patterns.
+```{r}
+p1 + p6
+```
+There's definitely a discernible similarity here! City center, and along Broad Street extending north and south have notable high ridership and job clusters. Where there are very few jobs, there is also very little bus ridership (and likely no routes at all).
+
+# Let's add roads
+
+As there can't be bus stops where there are no roads, let's load a local road shapefile and identify any cells that have no roads in them
+
+```{r}
+# WARNING: WE GOT PHILLY ROADS FROM A LARGER PA SHAPEFILE. HERE, WE LOAD IT IN, CLIP IT, AND MAKE A NEW SMALLER GEOJSON THAT CAN BE UPLOADED TO GITHUB ALONG WITH THE REST OF THE DATA:
+#   Loading the shape file:
+# roads <- st_read("data/local_roads/PaLocalRoads2024_03.shp")
+#   Setting the CRS:
+# roads <- st_transform(roads, st_crs(philly_grid))
+#   Clip to Philadelphia boundary:
+# roads <- roads[philadelphia, ]
+#   Write new geojson:
+# st_write(roads, "data/local_roads/Philadelphia_Roads.geojson")
+
+roads <- st_read("data/Philadelphia_Roads.geojson")
+
+st_crs(roads)
+
+
+# Let's map the roads
+ggplot() +
+  geom_sf(data = roads, color = "grey50", linewidth = 0.2) +
+  theme_void() +
+  labs(title = "Philadelphia Local Roads")
+```
+The roads clearly fill in almost all of the city. Most cells will have a road in them.
+
+#### Step 8: Create a binary road indicator
+
+For each cell, we'll create a binary variable that indicates whether it has a road in it or not
+```{r}
+# make a road_indicator that determines whether or not a cell has a road in it
+## we'll join this to the main grid later
+road_indicator <- philly_grid %>%
+  mutate(has_road = as.integer(lengths(st_intersects(., roads)) > 0)) %>%
+  st_drop_geometry() %>%
+  select(cell_id, has_road)
+
+table(road_indicator$has_road, useNA = "ifany")
+
+```
+There are 893 cells without roads in Philadelphia.
+
+#### Step 9: Join categorical variable for roads to your final dataset
+
+```{r}
+
+philly_grid_final <- philly_grid_final %>%
+  left_join(road_indicator, by = "cell_id") %>%
+  mutate(has_road = replace_na(has_road, 0))
+
+#Checking if it worked
+table(philly_grid_final$has_road, useNA = "ifany")
+
+#Making a dataset for road length in each grid cell
+road_length <- st_intersection(philly_grid, roads) %>%
+  mutate(length = st_length(geometry)) %>%
+  st_drop_geometry() %>%
+  group_by(cell_id) %>%
+  summarise(road_length = sum(length))
+
+```
+
+#### Step 10: Mapping which grid cells have roads
+
+```{r}
+
+d3 <- ggplot(philly_grid_final) +
+  geom_sf(aes(fill = factor(has_road)), color = NA) +
+  scale_fill_manual(values = c("0" = "darkgrey", "1" = "darkblue")) +
+  theme_void() +
+  labs(title = "Road Presence by Grid Cell")
+
+d3
+```
+
+# Spatial Lag baseline
+
+Before building complex models, let's create a simple baseline using a **Spatial Lag**.
+
+**Spatial Lag Baseline asks:** "What if bus ridership in a cell is just a weighted average of ridership in neighboring cells?" (simple spatial smoothing, no predictors)
+
+```{r}
+#| message: false
+
+nb <- poly2nb(philly_grid_final, queen = TRUE)  # queen = shares edge or corner
+weights <- nb2listw(nb, style = "W")            # W = row-standardized
+
+philly_grid_final <- philly_grid_final %>%
+  mutate(ridership_lag = lag.listw(weights, total_riders))
+
+# Let's map the spatial lag with the same limits and setup as our normal ridership map
+p7 = ggplot(philly_grid_final) +
+  aes(fill = ridership_lag) +
+  geom_sf(color = NA) +
+  scale_fill_viridis_c(option = "magma", name = "Spatial Lag Ridership", limits = c(0, 10000), oob = scales::squish) +
+  labs(
+    title = "Spatial Lag Baseline: Bus Ridership by Cell",
+    caption = "Each cell's value is the row-standardized average of its neighbors' ridership."
+  ) +
+  theme_void()
+
+#Let's map ridership and the spatial lag of ridership side by side
+p1 + p7
+```
+The general clusters are similar, but the spatial lag removes the sporadic one-cell extremes that are found in the raw cell data. At the locations in North/Northeast Philadelphia with small pockets of extreme ridership, the spatial lag expands them since it uses neighboring cells to create new averages.
+
+# MODEL CREATION
+
+Let's check our data to make sure we're free of NAs in our predictors or dependent variable
+```{r}
+philly_grid_final %>%
+  st_drop_geometry() %>%
+  summarise(across(everything(), ~ sum(is.na(.))))
+
+#Looks like we have some NAs in pct_no_vehicle and pct_poverty. That's likely due to dividing by 0. Let's fix that. Let's just replace those with zeros since cells with no households can't have household poverty or car ownership
+
+philly_grid_final <- philly_grid_final %>%
+  mutate(
+    pct_no_vehicle = ifelse(is.na(pct_no_vehicle) | is.nan(pct_no_vehicle), 0, pct_no_vehicle),
+    pct_poverty = ifelse(is.na(pct_poverty) | is.nan(pct_poverty), 0, pct_poverty)
+  )
+
+```
+
+# Moran's I Calucation for the total riders
+
+Actually create moran_class for the model
+We ar using log value for total riders as it is highly skewed
+
+```{r}
+
+# Create neighbors
+nb <- poly2nb(philly_grid_final)
+lw <- nb2listw(nb, style = "W")
+
+#Run Local Moran's I
+local_moran <- localmoran(log1p(philly_grid_final$total_riders), lw) #Using log value for total riders as it is highly skewed
+
+#Add results back to philly_grid_final
+philly_grid_final <- philly_grid_final %>%
+  mutate(
+    Ii = local_moran[,1],
+    p_value = local_moran[,5]
+  )
+
+#Create cluster labels
+philly_grid_final <- philly_grid_final %>%
+  mutate(
+    moran_class = case_when(
+      total_riders > mean(total_riders) & Ii > 0 & p_value < 0.05 ~ "High-High",
+      total_riders < mean(total_riders) & Ii > 0 & p_value < 0.05 ~ "Low-Low",
+      total_riders > mean(total_riders) & Ii < 0 & p_value < 0.05 ~ "High-Low",
+      total_riders < mean(total_riders) & Ii < 0 & p_value < 0.05 ~ "Low-High",
+      TRUE ~ "Not Significant"
+    )
+  )
+
+```
+
+# LISA Cluster Map
+
+Now that we have the local cluster map through Moran's I, let's see how it looks!
+
+```{r}
+#Visualization for LISA
+ggplot(philly_grid_final) +
+  geom_sf(aes(fill = moran_class), color = NA) +
+  scale_fill_manual(
+    values = c(
+      "High-High" = "red",
+      "Low-Low" = "blue",
+      "High-Low" = "orange",
+      "Low-High" = "lightblue",
+      "Not Significant" = "grey80",
+      "No Road" = "black"
+    )
+  ) +
+  labs(
+    title = "Local Moran’s I Cluster Map (Bus Ridership)",
+    fill = "Cluster Type"
+  ) +
+  theme_void()
+
+```
+
+# Preparing the variables for the Model
+
+**Dependent variable**
+total_riders (or log-transformed)
+
+**Predictors**
+Demographics → population, income, etc.
+Jobs - total_jobs
+Transit supply - unique_routes, stop_count
+Spatial - density variables
+Hotspots - Moran’s I classification
+
+```{r}
+#Ridership is skewed so we are creating log transformed variable
+model_data <- philly_grid_final %>%
+  st_drop_geometry() %>%
+  mutate(
+    log_riders = log1p(total_riders),
+
+    # Example engineered variables
+    jobs_density = jobs_half_mile / ((1000 * 0.3048)^2),
+    pop_density  = total_popE / ((1000 * 0.3048)^2),
+
+    # Convert categorical variables
+    moran_class = as.factor(moran_class)
+  ) %>%
+  drop_na(log_riders)
+
+```
+
+# Baseline OLS regression Model
+
+Let's finally get into making models!
+
+```{r}
+#OLS Regression Model
+model_ols <- lm(
+  log_riders ~ total_popE + jobs_half_mile +
+    unique_routes + unique_stops +
+    median_income,
+  data = model_data
+)
+
+summary(model_ols)
+
+```
+
+# Cross-Validation (K-Fold)
+
+For our cross validation we will be using the K-fold method as we analysis data post COVID which restricts the data on which we can test :(
+
+```{r}
+#Cross Validation using K-folds method
+
+set.seed(123)
+
+train_control <- trainControl(
+  method = "cv",
+  number = 5
+)
+
+model_cv <- train(
+  log_riders ~ total_popE + jobs_half_mile +
+    unique_routes + unique_stops +
+    median_income,
+  data = model_data,
+  method = "lm",
+  trControl = train_control
+)
+
+model_cv
+
+```
+
+# Prediction Model for Ridership
+
+Now we will be predicting the ridership using our model
+
+```{r}
+#Predict Ridership
+
+model_data$predicted_log <- predict(model_ols, model_data)
+
+model_data <- model_data %>%
+  mutate(
+    predicted_riders = expm1(predicted_log)
+  )
+
+```
+
+# Map Predicted Ridership
+
+What better way then mapping the predicted ridership
+
+```{r}
+#Visualization for predicted ridership
+
+philly_grid_final$predicted_riders <- model_data$predicted_riders
+
+ggplot(philly_grid_final) +
+  geom_sf(aes(fill = predicted_riders), color = NA) +
+  scale_fill_viridis_c() +
+  theme_void() +
+  labs(title = "Predicted Bus Ridership")
+
+```
+
+# Investment / Disinvestment Logic
+
+Using our predicted ridership we will check wher we can invest or deinvest
+
+```{r}
+#Creating a variable for where we can invest/deinvest
+
+philly_grid_final <- philly_grid_final %>%
+  mutate(
+    investment_priority = case_when(
+      predicted_riders > quantile(predicted_riders, 0.8) ~ "High Investment",
+      predicted_riders < quantile(predicted_riders, 0.2) ~ "Low Priority",
+      TRUE ~ "Moderate"
+    )
+  )
+
+#Creating a variable to see where we see major gaps in predicted vs current ridership
+model_data <- model_data %>%
+  mutate(
+    predicted_log = predict(model_cv, model_data),
+    predicted_riders = expm1(predicted_log),
+    gap = predicted_riders - total_riders
+  )
+
+philly_grid_final$gap <- model_data$gap
+
+```
+
+# Mapping the gap
+
+Using our predicted ridership we will check wher we can invest or deinvest
+
+```{r}
+#Creating a variable for where we can invest/deinvest
+
+library(scales)
+
+m1 <- ggplot(philly_grid_final) +
+  geom_sf(aes(fill = gap), color = NA) +
+  scale_fill_viridis_c(
+    option = "magma",
+    name = "Gap",
+    rescaler = ~ rescale_mid(.x, mid = 0)
+  ) +
+  theme_void() +
+  labs(title = "Ridership Gap (Predicted - Actual)")
+
+m1
+
+m2 <- ggplot(philly_grid_final) +
+  geom_sf(aes(fill = gap), color = NA) +
+  scale_fill_gradient2(
+    low = "blue",
+    mid = "grey",
+    high = "red",
+    midpoint = 0,
+    name = "Gap (Pred - Actual)"
+  ) +
+  theme_void() +
+  labs(title = "Ridership Gap (Predicted - Actual)")
+
+m2
+
+m1 +m2
+
+ggplot(philly_grid_final) +
+  geom_sf(aes(fill = gap), color = NA) +
+  scale_fill_gradient2() +
+  theme_void() +
+  labs(title = "Ridership Gap (Predicted - Actual)")
+```
+#Spatial Lag Model
+
+#Spatial Lag Model (Code)
+
+Why this works:
+It directly builds on Moran’s I (which you already used)
+It addresses spatial dependence
+It’s standard in spatial econometrics (more “teachable” than GWR)
+
+```{r}
+# Install if needed
+library(spdep)
+library(spatialreg)
+
+# Create spatial weights (k-nearest neighbors)
+coords <- st_coordinates(st_centroid(philly_grid_final))
+
+knn_nb <- knearneigh(coords, k = 5)
+nb <- knn2nb(knn_nb)
+lw <- nb2listw(nb, style = "W")
+
+# Prepare data
+model_data_sp <- philly_grid_final %>%
+  st_drop_geometry() %>%
+  mutate(
+    log_riders = log1p(total_riders)
+  ) %>%
+  drop_na(log_riders)
+
+# Spatial Lag Model
+lag_model <- lagsarlm(
+  log_riders ~ total_popE + jobs_half_mile +
+    unique_routes + unique_stops + 
+    has_road + pct_no_vehicle +
+    median_income + moran_class,
+  data = model_data_sp,
+  listw = lw
+)
+
+summary(lag_model)
+
+#Checking Multicollinearity
+lm_model <- lm(
+  log_riders ~ total_popE + jobs_half_mile +
+    unique_routes + unique_stops + 
+    has_road + pct_no_vehicle +
+    median_income + moran_class,
+  data = model_data_sp
+)
+
+car::vif(lm_model)
+```
+
+# Cross Validation for Spatial Lag
+
+```{r}
+#Cross Validation using K-folds method
+
+set.seed(123)
+folds <- createFolds(model_data_sp$log_riders, k = 5)
+
+cv_results <- map_dfr(folds, function(test_idx) {
+  train_data <- philly_grid_final[-test_idx, ]
+  test_data  <- philly_grid_final[test_idx, ]
+  
+  # Recompute spatial weights on training fold
+  coords_train <- st_coordinates(st_centroid(train_data))
+  knn_train <- knearneigh(coords_train, k = 5)
+  nb_train <- knn2nb(knn_train)
+  lw_train <- nb2listw(nb_train, style = "W")
+  
+  # Drop geometry for model fitting
+  train_sp <- train_data %>% st_drop_geometry()
+  test_sp  <- test_data %>% st_drop_geometry()
+  
+  # Fit spatial lag model
+  fit <- lagsarlm(
+    log_riders ~ total_popE + jobs_half_mile +
+      unique_routes + unique_stops +
+      has_road + pct_no_vehicle +
+      median_income + moran_class,
+    data = model_data_sp,
+    listw = lw_train
+  )
+  
+  # Predict on test fold
+  preds <- predict(fit, newdata = test_sp, listw = lw_train)
+  
+  tibble(
+    RMSE = RMSE(as.numeric(preds), test_sp$log_riders),
+    MAE  = MAE(as.numeric(preds), test_sp$log_riders),
+    R2   = cor(as.numeric(preds), test_sp$log_riders)^2
+  )
+})
+
+# Average across folds
+colMeans(cv_results)
+
+```
+
+
+#Negative Binomial Regression
+
+- Designed for count data
+- Handles overdispersion
+- More realistic for transit demand
+
+This seems the best method for non-spatial model for your data
+
+```{r}
+#Visualization for predicted ridership
+
+library(MASS)
+
+model_nb <- glm.nb(
+  total_riders ~ total_popE + jobs_half_mile +
+    unique_routes + pct_no_vehicle + dist_el_ft + has_road +
+    median_income,
+  data = model_data
+)
+
+mean(model_data$total_riders)
+
+var(model_data$total_riders)
+
+model_pois <- glm(
+  total_riders ~ total_popE + jobs_half_mile +
+    unique_routes + pct_no_vehicle + dist_el_ft + has_road +
+    median_income,
+  family = poisson(link = "log"),
+  data = model_data
+)
+
+AIC(model_nb, model_pois)
+
+exp(coef(model_nb))
+
+# Predictions (response scale, not log)
+pred_nb   <- predict(model_nb, type = "response")
+pred_pois <- predict(model_pois, type = "response")
+
+# Actual values
+actual <- model_data$total_riders
+
+# RMSE
+rmse_nb <- sqrt(mean((actual - pred_nb)^2, na.rm = TRUE))
+rmse_pois <- sqrt(mean((actual - pred_pois)^2, na.rm = TRUE))
+
+# MAE
+mae_nb <- mean(abs(actual - pred_nb), na.rm = TRUE)
+mae_pois <- mean(abs(actual - pred_pois), na.rm = TRUE)
+
+# Print results
+rmse_nb
+mae_nb
+
+rmse_pois
+mae_pois
+
+summary(model_nb)
+```
+# Visualization of Negative Binomial model predictions
+
+```{r}
+# Add predictions to model_data
+model_data <- model_data %>%
+  mutate(predicted_riders_nb = predict(model_nb, type = "response"))
+
+# Join back to spatial object for mapping
+philly_grid_final <- philly_grid_final %>%
+  left_join(
+    model_data %>% dplyr::select(cell_id, predicted_riders_nb),
+    by = "cell_id"
+  )
+
+# Map predicted ridership
+r1 <- ggplot(philly_grid_final) +
+  geom_sf(aes(fill = predicted_riders_nb), color = NA) +
+  scale_fill_viridis_c(
+    option = "magma",
+    labels = scales::comma,
+    limits = c(0, 10000),
+    oob = scales::squish,
+    name = "Predicted\nRiders"
+  ) +
+  labs(
+    title = "Predicted Bus Ridership by Grid Cell",
+    subtitle = "Negative Binomial Model"
+  ) +
+  theme_void()
+
+p1 + r1
+```
+```{r}
+# Get predictions on log scale
+log_pred <- fitted(lag_model)
+
+# Back-transform to rider scale
+pred_riders <- exp(log_pred)
+actual_riders <- model_data_sp$riders  # your original un-logged ridership
+
+# Now compute error in actual rider units
+mae_riders  <- mean(abs(pred_riders - actual_riders))
+rmse_riders <- sqrt(mean((pred_riders - actual_riders)^2))
+
+mae_riders
+rmse_riders
+```
+
+#Negative Binomial Regression
+
+Designed for count data
+Handles overdispersion
+More realistic for transit demand
+
+This seems the best method for non-spatial model for your data
+
+# MAPPING STUFF FOR THE PRESENTATION
+
+```{r}
+d1 + p6 
+d2 + d3
+```
+
+```{r}
+e1 <- ggplot(philly_grid_final) +
+  geom_sf(aes(fill = investment_priority), color = NA) +
+  scale_fill_manual(
+    values = c(
+      "High Investment" = "red",
+      "Moderate" = "blue",
+      "Low Priority" = "lightblue"
+    )
+  ) +
+  labs(
+    title = "Investment Priority Plan",
+    fill = "Priority Level"
+  ) +
+  theme_void()
+
+e1
+```
+
