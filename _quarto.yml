@@ -22,6 +22,8 @@ website:
             text: "Lab 4: Spatial Predictive Analysis"
           - href: Labs/Labs_5/week11_inclass_and_lab5.qmd
             text: "Lab 5: Bikeshare SpaceTime Prediction"
+          - href: Labs/PPA_Finals/Lab_6/Final_Model_TechnicalAppendix.qmd
+            text: "Transit Prediction Model- Technical Appendix"
 
 format:
   html:

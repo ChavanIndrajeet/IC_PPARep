@@ -354,7 +354,7 @@ Let's remove cells that have total riders greater than 40 thousand, as we are no
 
 ```{r}
 philly_grid_final <- philly_grid_final %>%
-  filter(total_riders <= 40000)
+  filter(total_riders <= 25000)
 ```
 
 ## Getting More Spatial Data: Rail and Bus
@@ -426,7 +426,7 @@ Now let's get employment data. We want to use the number of jobs within a half m
 # API call to get the lodes data
 lodes<- grab_lodes(
   state = "pa",
-  year = 2021,
+  year = 2023,
   lodes_type = "wac",
   job_type = "JT00",
   segment = "S000",
@@ -434,7 +434,7 @@ lodes<- grab_lodes(
   agg_geo = "bg"   #IMPORTANT
 )
 
-block_groups <- block_groups(state = "PA", county = "Philadelphia", year = 2021) %>%
+block_groups <- block_groups(state = "PA", county = "Philadelphia", year = 2023) %>%
   st_transform(2272)
 
 names(lodes)
@@ -629,7 +629,7 @@ philly_grid_final <- philly_grid_final %>%
 # Moran's I Calucation for the total riders
 
 Actually create moran_class for the model
-We ar using log value for total riders as it is highly skewed
+We are using log value for total riders as it is highly skewed
 
 ```{r}
 
@@ -1026,6 +1026,68 @@ mae_pois
 
 summary(model_nb)
 ```
+
+
+```{r}
+# ---- Spatial Block Cross-Validation for Negative Binomial ----
+library(spatialsample)
+library(rsample)
+
+# Build a clean sf object with only what the model needs
+sp_cv_data <- philly_grid_final %>%
+  dplyr::select(
+    cell_id, total_riders,
+    total_popE, jobs_half_mile, unique_routes,
+    pct_no_vehicle, dist_el_ft, has_road, median_income
+  ) %>%
+  tidyr::drop_na()
+
+# Create spatial block folds.
+# CRS is EPSG:2272 (units = US feet). 5280 ft = 1-mile blocks.
+set.seed(123)
+block_folds <- spatial_block_cv(
+  sp_cv_data,
+  v = 10,
+  cellsize = 5280   # try 7920 (1.5 mi) or 10560 (2 mi) if folds look uneven
+)
+
+# Sanity check — visualize the blocks
+autoplot(block_folds)
+autoplot(block_folds$splits[[1]])   # one fold's train/test split
+
+# Define the NB formula once
+nb_formula <- total_riders ~ total_popE + jobs_half_mile +
+  unique_routes + pct_no_vehicle + dist_el_ft + has_road +
+  median_income
+
+# Fit NB on each training fold, predict on held-out spatial block
+cv_results <- purrr::map_dfr(seq_along(block_folds$splits), function(i) {
+  split <- block_folds$splits[[i]]
+  train <- analysis(split)   %>% st_drop_geometry()
+  test  <- assessment(split) %>% st_drop_geometry()
+  
+  fit   <- MASS::glm.nb(nb_formula, data = train)
+  preds <- predict(fit, newdata = test, type = "response")
+  
+  tibble(
+    fold   = i,
+    n_test = nrow(test),
+    rmse   = sqrt(mean((test$total_riders - preds)^2)),
+    mae    = mean(abs(test$total_riders - preds)),
+    r2     = cor(test$total_riders, preds)^2
+  )
+})
+
+# Per-fold results
+cv_results
+
+# Overall (averaged across folds)
+cv_results %>% summarise(
+  mean_rmse = mean(rmse),
+  mean_mae  = mean(mae),
+  mean_r2   = mean(r2)
+)
+```
 # Visualization of Negative Binomial model predictions
 
 ```{r}
@@ -1058,6 +1120,7 @@ r1 <- ggplot(philly_grid_final) +
 
 p1 + r1
 ```
+
 ```{r}
 # Get predictions on log scale
 log_pred <- fitted(lag_model)
